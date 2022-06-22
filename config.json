@@ -1,0 +1,21 @@
+{
+    "data": {
+      
+    },
+
+    "actor": {
+      
+    },
+
+    "critic": {
+      
+    },
+
+    "noise":{
+        "OUActionNoise":{
+            "sigma": 0.15, 
+            "theta": 0.2, 
+            "dt": 1e-2
+        }
+    }
+  }
