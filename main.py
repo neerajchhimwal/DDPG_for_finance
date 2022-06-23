@@ -3,49 +3,51 @@ import gym
 import numpy as np
 from utils import plotLearning
 import wandb
+from config import *
 
 ENV_NAME = 'LunarLanderContinuous-v2'
-ACTOR_LR = 0.000025
-CRITIC_LR = 0.00025
-BATCH_SIZE = 64
-LAYER_1_SIZE = 400
-LAYER_2_SIZE = 300
 
-config = dict(
+
+w_config = dict(
   alpha = ACTOR_LR,
   beta = CRITIC_LR,
   batch_size = BATCH_SIZE,
   layer1_size = LAYER_1_SIZE,
   layer2_size = LAYER_2_SIZE,
-  input_dims = [8],
-  n_actions = 2,
-  tau = 0.001,
+  input_dims = STATE_SPACE,
+  n_actions = N_ACTIONS,
+  tau = TAU,
   architecture = "DDPG",
-  infra = "Ubuntu",
   env = ENV_NAME
 )
+
 PROJECT_NAME = f"pytorch_ddpg_{ENV_NAME.lower()}"
 
-run = wandb.init(project=PROJECT_NAME, tags=["DDPG", "FCL", "RL"], config=config, job_type='train_model')
+if USE_WANDB:
+    run = wandb.init(project=PROJECT_NAME, tags=["DDPG", "RL"], config=w_config, job_type='train_model')
 
 
 env = gym.make(ENV_NAME)
-agent = Agent(alpha=config['alpha'], beta=config['beta'], input_dims=config['input_dims'], tau=config['tau'], env=config['env'],
-              batch_size=config['batch_size'], layer1_size=config['layer1_size'], layer2_size=config['layer2_size'], 
-              n_actions=config['n_actions'])
+agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, input_dims=STATE_SPACE, tau=TAU, env=ENV_NAME,
+              batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, 
+              n_actions=N_ACTIONS)
 
-# uncomment the load_models line if you're testing and want to continue using trained models
-# agent.load_models()
+starting_episode = 0
+if not TRAIN_FROM_SCRATCH:
+    agent.load_models()
+    starting_episode = agent.episode + 1
+
 np.random.seed(0)
 
 score_history = []
-for i in range(2000): # 1000 episodes (here, games)
+for i in range(starting_episode, TOTAL_EPISODES):
     obs = env.reset()
     done = False
     score = 0
     step_count = 0
     actor_loss_per_step_list = []
     critic_loss_per_step_list = []
+    agent.episode = i
     while not done:
         act = agent.choose_action(obs)
         new_state, reward, done, info = env.step(act)
@@ -65,14 +67,14 @@ for i in range(2000): # 1000 episodes (here, games)
         obs = new_state
         # env.render()
     score_history.append(score)
+    if USE_WANDB:
+        run.log({'steps per episode': step_count, 'episode': i})
+        run.log({'reward': score, 'episode': i})
+        run.log({'reward avg 100 games': np.mean(score_history[-100:]), 'episode': i})
+        run.log({'Actor loss': np.mean(actor_loss_per_step_list), 'episode': i})
+        run.log({'Critic loss': np.mean(critic_loss_per_step_list), 'episode': i})
 
-    run.log({'steps per episode': step_count, 'episode': i})
-    run.log({'reward': score, 'episode': i})
-    run.log({'reward avg 100 games': np.mean(score_history[-100:]), 'episode': i})
-    run.log({'Actor loss': np.mean(actor_loss_per_step_list), 'episode': i})
-    run.log({'Critic loss': np.mean(critic_loss_per_step_list), 'episode': i})
-
-    if i % 25 == 0:
+    if i % SAVE_CKP_AFTER_EVERY_NUM_EPISODES == 0:
        agent.save_models()
     print('='*50)
     print('episode ', i, 'score %.2f' % score,

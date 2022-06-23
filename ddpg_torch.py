@@ -6,7 +6,8 @@ import torch.optim as optim
 import numpy as np
 import json
 
-from loadconfig import *
+from config import DEVICE, sigma, theta, dt
+
 
 class OUActionNoise(object):
     '''
@@ -92,24 +93,19 @@ class CriticNetwork(nn.Module):
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.checkpoint_file = os.path.join(chkpt_dir,name+'_ddpg')
+        self.checkpoint_file = os.path.join(chkpt_dir, name+'_ddpg')
         
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         # below 3 lines to initilaize the starting weights of parameters in a very narrow region space: helps with comvergence
         f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
         T.nn.init.uniform_(self.fc1.weight.data, -f1, f1)
         T.nn.init.uniform_(self.fc1.bias.data, -f1, f1)
-        #self.fc1.weight.data.uniform_(-f1, f1)
-        #self.fc1.bias.data.uniform_(-f1, f1)
         self.bn1 = nn.LayerNorm(self.fc1_dims) # batch normalization helps with convergence
 
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
-        #f2 = 0.002
         T.nn.init.uniform_(self.fc2.weight.data, -f2, f2)
         T.nn.init.uniform_(self.fc2.bias.data, -f2, f2)
-        #self.fc2.weight.data.uniform_(-f2, f2)
-        #self.fc2.bias.data.uniform_(-f2, f2)
         self.bn2 = nn.LayerNorm(self.fc2_dims)
 
         self.action_value = nn.Linear(self.n_actions, self.fc2_dims)
@@ -117,12 +113,10 @@ class CriticNetwork(nn.Module):
         self.q = nn.Linear(self.fc2_dims, 1)
         T.nn.init.uniform_(self.q.weight.data, -f3, f3)
         T.nn.init.uniform_(self.q.bias.data, -f3, f3)
-        #self.q.weight.data.uniform_(-f3, f3)
-        #self.q.bias.data.uniform_(-f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-
+        self.device = T.device(DEVICE)
+        self.episode = 0
         self.to(self.device)
 
     def forward(self, state, action):
@@ -138,13 +132,25 @@ class CriticNetwork(nn.Module):
 
         return state_action_value
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, episode):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+
+        state = {
+                'state': self.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'episode': episode
+        }
+
+        T.save(state, self.checkpoint_file)
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file))
+        checkpoint = T.load(self.checkpoint_file)
+        self.load_state_dict(checkpoint['state'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.episode = checkpoint['episode']
+        self.to(T.device(DEVICE))
+        
 
 class ActorNetwork(nn.Module):
     '''
@@ -162,30 +168,23 @@ class ActorNetwork(nn.Module):
         f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
         T.nn.init.uniform_(self.fc1.weight.data, -f1, f1)
         T.nn.init.uniform_(self.fc1.bias.data, -f1, f1)
-        #self.fc1.weight.data.uniform_(-f1, f1)
-        #self.fc1.bias.data.uniform_(-f1, f1)
+        
         self.bn1 = nn.LayerNorm(self.fc1_dims)
 
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        #f2 = 0.002
         f2 = 1./np.sqrt(self.fc2.weight.data.size()[0])
         T.nn.init.uniform_(self.fc2.weight.data, -f2, f2)
         T.nn.init.uniform_(self.fc2.bias.data, -f2, f2)
-        #self.fc2.weight.data.uniform_(-f2, f2)
-        #self.fc2.bias.data.uniform_(-f2, f2)
         self.bn2 = nn.LayerNorm(self.fc2_dims)
 
-        #f3 = 0.004
         f3 = 0.003
         self.mu = nn.Linear(self.fc2_dims, self.n_actions) # mu represents actions here
         T.nn.init.uniform_(self.mu.weight.data, -f3, f3)
         T.nn.init.uniform_(self.mu.bias.data, -f3, f3)
-        #self.mu.weight.data.uniform_(-f3, f3)
-        #self.mu.bias.data.uniform_(-f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-
+        self.device = T.device(DEVICE)
+        self.episode = 0
         self.to(self.device)
 
     def forward(self, state):
@@ -200,13 +199,25 @@ class ActorNetwork(nn.Module):
 
         return x
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, episode):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+
+        state = {
+                'state': self.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'episode': episode
+        }
+
+        T.save(state, self.checkpoint_file)
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file))
+        checkpoint = T.load(self.checkpoint_file)
+        self.load_state_dict(checkpoint['state'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.episode = checkpoint['episode']
+        self.to(T.device(DEVICE))
+        
 
 class Agent(object):
     def __init__(self, alpha, beta, input_dims, tau, env, gamma=0.99,
@@ -225,6 +236,7 @@ class Agent(object):
         self.actor = ActorNetwork(alpha, input_dims, layer1_size,
                                   layer2_size, n_actions=n_actions,
                                   name='Actor')
+
         self.critic = CriticNetwork(beta, input_dims, layer1_size,
                                     layer2_size, n_actions=n_actions,
                                     name='Critic')
@@ -232,6 +244,7 @@ class Agent(object):
         self.target_actor = ActorNetwork(alpha, input_dims, layer1_size,
                                          layer2_size, n_actions=n_actions,
                                          name='TargetActor')
+
         self.target_critic = CriticNetwork(beta, input_dims, layer1_size,
                                            layer2_size, n_actions=n_actions,
                                            name='TargetCritic')
@@ -241,6 +254,7 @@ class Agent(object):
         self.update_network_parameters(tau=1)
         self.actor_loss_step = 0
         self.critic_loss_step = 0
+        self.episode = 0
 
     def choose_action(self, observation):
         self.actor.eval()
@@ -353,29 +367,23 @@ class Agent(object):
         '''
 
     def save_models(self):
-        self.actor.save_checkpoint()
-        self.target_actor.save_checkpoint()
-        self.critic.save_checkpoint()
-        self.target_critic.save_checkpoint()
+        '''
+        Saving state dicts as well as optimizer state for each model
+        '''
+
+        episode = self.episode
+        
+        self.actor.save_checkpoint(episode)
+        self.target_actor.save_checkpoint(episode)
+        self.critic.save_checkpoint(episode)
+        self.target_critic.save_checkpoint(episode)
 
     def load_models(self):
+        '''
+        also load episode number here
+        '''
         self.actor.load_checkpoint()
         self.target_actor.load_checkpoint()
         self.critic.load_checkpoint()
         self.target_critic.load_checkpoint()
-
-    def check_actor_params(self):
-        current_actor_params = self.actor.named_parameters()
-        current_actor_dict = dict(current_actor_params)
-        original_actor_dict = dict(self.original_actor.named_parameters())
-        original_critic_dict = dict(self.original_critic.named_parameters())
-        current_critic_params = self.critic.named_parameters()
-        current_critic_dict = dict(current_critic_params)
-        print('Checking Actor parameters')
-
-        for param in current_actor_dict:
-            print(param, T.equal(original_actor_dict[param], current_actor_dict[param]))
-        print('Checking critic parameters')
-        for param in current_critic_dict:
-            print(param, T.equal(original_critic_dict[param], current_critic_dict[param]))
-        input()
+        self.episode = self.target_critic.episode
