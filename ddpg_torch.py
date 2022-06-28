@@ -7,7 +7,8 @@ import numpy as np
 import json
 
 from config import DEVICE, sigma, theta, dt
-
+from config import CHECKPOINT_DIR
+import os
 
 class OUActionNoise(object):
     '''
@@ -54,8 +55,8 @@ class ReplayBuffer(object):
     def __init__(self, max_size, input_shape, n_actions):
         self.mem_size = max_size
         self.mem_cntr = 0
-        self.state_memory = np.zeros((self.mem_size, *input_shape))
-        self.new_state_memory = np.zeros((self.mem_size, *input_shape))
+        self.state_memory = np.zeros((self.mem_size, input_shape))
+        self.new_state_memory = np.zeros((self.mem_size, input_shape))
         self.action_memory = np.zeros((self.mem_size, n_actions))
         self.reward_memory = np.zeros(self.mem_size)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.float32)
@@ -87,15 +88,15 @@ class CriticNetwork(nn.Module):
     approximates the value function for critic network
     '''
     def __init__(self, beta, input_dims, fc1_dims, fc2_dims, n_actions, name,
-                 chkpt_dir='tmp/ddpg'):
+                 chkpt_dir=CHECKPOINT_DIR):
         super(CriticNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.checkpoint_file = os.path.join(chkpt_dir, name+'_ddpg')
+        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(beta)+'_ddpg')
         
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
+        self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
         # below 3 lines to initilaize the starting weights of parameters in a very narrow region space: helps with comvergence
         f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
         T.nn.init.uniform_(self.fc1.weight.data, -f1, f1)
@@ -157,14 +158,14 @@ class ActorNetwork(nn.Module):
     approximates the policy function
     '''
     def __init__(self, alpha, input_dims, fc1_dims, fc2_dims, n_actions, name,
-                 chkpt_dir='tmp/ddpg'):
+                 chkpt_dir=CHECKPOINT_DIR):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.checkpoint_file = os.path.join(chkpt_dir,name+'_ddpg')
-        self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
+        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(alpha)+'_ddpg')
+        self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
         f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
         T.nn.init.uniform_(self.fc1.weight.data, -f1, f1)
         T.nn.init.uniform_(self.fc1.bias.data, -f1, f1)
@@ -260,8 +261,9 @@ class Agent(object):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
         mu = self.actor.forward(observation).to(self.actor.device)
-        mu_prime = mu + T.tensor(self.noise(),
-                                 dtype=T.float).to(self.actor.device)
+        # clip is done below to still keep actions in tanh range after adding noise to greedy action
+        mu_prime = T.clip(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device), min=-1, max=+1) 
+        mu_prime.to(self.actor.device)
         self.actor.train()
         return mu_prime.cpu().detach().numpy()
 
