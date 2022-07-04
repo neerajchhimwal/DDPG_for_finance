@@ -13,8 +13,8 @@ Install pytorch based on system from [here](https://pytorch.org/get-started/loca
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 ```
 
-Make sure you have an active weights and biases initialization:
-  - run '_wandb login_' on terminal
+Make sure you have an active weights and biases account login:
+  - run '_wandb login_' in terminal
 
 
 ## For training on stock market data
