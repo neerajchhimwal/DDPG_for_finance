@@ -16,12 +16,12 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-ENV_NAME = 'stock_trading'
+ENV_NAME = 'stock_tr_scaled_actions'
 
 # DATA
 
 # df = download(TRAIN_START_DATE, TRADE_END_DATE, ticker_list=config_tickers.DOW_30_TICKER)
-if not (os.path.exists(TRAIN_CSV_NAME) or os.path.exists(TEST_CSV_NAME) or os.path.exists(TRADE_CSV_NAME)):
+if not (os.path.exists(TRAIN_CSV_NAME) and os.path.exists(TEST_CSV_NAME) and os.path.exists(TRADE_CSV_NAME)):
     df = YahooDownloader(start_date = TRAIN_START_DATE,
                         end_date = TRADE_END_DATE,
                         ticker_list = config_tickers.DOW_30_TICKER).fetch_data()
@@ -181,6 +181,8 @@ for i in range(starting_episode, TOTAL_EPISODES):
         print('results table....')
         print(df_account_value.head())
         results_dir = './results'
+        if not os.path.exists(results_dir):
+            os.makedirs(results_dir)
         account_value_csv_name = f'account_value_test_episode_{i}.csv'
         actions_csv_name = f'daily_actions_test_episode_{i}.csv'
         results_table_name = f'return_comparison_episode_{i}.csv'

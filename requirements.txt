@@ -1,6 +1,6 @@
-gym['all']
+gym
 matplotlib
 numpy 
 pandas
-finrl['all']
+finrl
 wandb
