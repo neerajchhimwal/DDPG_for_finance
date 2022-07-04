@@ -1,9 +1,9 @@
 import torch
 import os
 
-ACTOR_LR = 0.0025
-CRITIC_LR = 0.0025
-BATCH_SIZE = 128
+ACTOR_LR = 0.000025
+CRITIC_LR = 0.00025
+BATCH_SIZE = 64
 LAYER_1_SIZE = 400
 LAYER_2_SIZE = 300
 TAU = 0.001
@@ -15,25 +15,32 @@ STATE_SPACE = 8
 
 TRAIN_FROM_SCRATCH = True
 SEED = 0
-CHECKPOINT_DIR = 'trained_models/'
+CHECKPOINT_DIR = 'trained_models/batch_64/'
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
 
 TRAIN_START_DATE = '2009-01-01'
 TRAIN_END_DATE = '2016-01-01'
-VALID_START_DATE = '2016-01-02'
-VALID_END_DATE = '2022-07-31'
+
+TEST_START_DATE = '2016-01-01'
+TEST_END_DATE = '2017-01-01'
+
+TRADE_START_DATE = '2016-01-02'
+TRADE_END_DATE = '2022-07-31'
 
 ticker_name_from_config_tickers = 'DOW_30_TICKER'
-ORIGINAL_CSV_NAME = f'./data/data_raw_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{VALID_END_DATE}.csv'
-PROCESSED_CSV_NAME = f'./data/data_processed_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{VALID_END_DATE}.csv'
+ORIGINAL_CSV_NAME = f'./data/data_raw_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRADE_END_DATE}.csv'
+PROCESSED_CSV_NAME = f'./data/data_processed_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRADE_END_DATE}.csv'
 TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRAIN_END_DATE}.csv'
-TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{VALID_START_DATE}_to_{VALID_END_DATE}.csv'
+TEST_CSV_NAME =  f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
+TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{TRADE_START_DATE}_to_{TRADE_END_DATE}.csv'
 
-TOTAL_EPISODES = 100
+TOTAL_EPISODES = 250
 SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 10
+SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES = 10
 
-USE_WANDB = False
+USE_WANDB = True
+# RESUME_LAST_WANDB_RUN = True
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 

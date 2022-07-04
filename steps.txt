@@ -1,6 +1,0 @@
-conda create -n ddpg_torch_gym python=3.7
-conda activate ddpg_torch_gym
-conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
-pip install gym['all']
-pip install matplotlib
-pip install numpy pandas

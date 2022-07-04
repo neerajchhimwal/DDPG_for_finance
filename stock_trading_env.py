@@ -33,7 +33,7 @@ class StockTradingEnv(gym.Env):
         turbulence_threshold=None,
         risk_indicator_col="turbulence",
         make_plots: bool =False,
-        print_verbosity=10,
+        print_verbosity=2,
         day=0,
         initial=True,
         previous_state=[],
@@ -226,6 +226,7 @@ class StockTradingEnv(gym.Env):
             df_rewards = pd.DataFrame(self.rewards_memory)
             df_rewards.columns = ["account_rewards"]
             df_rewards["date"] = self.date_memory[:-1]
+            # print(f'Episode: {self.episode}, verbosity: {self.print_verbosity}')
             if self.episode % self.print_verbosity == 0:
                 print(f"day: {self.day}, episode: {self.episode}")
                 print(f"begin_total_asset: {self.asset_memory[0]:0.2f}")
@@ -264,6 +265,7 @@ class StockTradingEnv(gym.Env):
                     index=False,
                 )
                 plt.close()
+            
 
             # Add outputs to logger interface
             # logger.record("environment/portfolio_value", end_total_asset)
@@ -275,10 +277,12 @@ class StockTradingEnv(gym.Env):
             return self.state, self.reward, self.terminal, {}
 
         else:
-            actions = actions * self.hmax  # actions initially is scaled between 0 to 1
+            # print('Actions: ', actions)
+            actions = actions * self.hmax  # actions initially is scaled between -1 to 1
             actions = actions.astype(
                 int
             )  # convert into integer because we can't by fraction of shares
+            # print('Actions hmax: ', actions)
             if self.turbulence_threshold is not None:
                 if self.turbulence >= self.turbulence_threshold:
                     actions = np.array([-self.hmax] * self.stock_dim)

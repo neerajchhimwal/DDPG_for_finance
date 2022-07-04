@@ -1,0 +1,6 @@
+gym['all']
+matplotlib
+numpy 
+pandas
+finrl['all']
+wandb

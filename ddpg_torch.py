@@ -94,7 +94,7 @@ class CriticNetwork(nn.Module):
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(beta)+'_ddpg')
+        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(beta)+'_ddpg.pt')
         
         self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
         # below 3 lines to initilaize the starting weights of parameters in a very narrow region space: helps with comvergence
@@ -164,7 +164,7 @@ class ActorNetwork(nn.Module):
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(alpha)+'_ddpg')
+        self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(alpha)+'_ddpg.pt')
         self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
         f1 = 1./np.sqrt(self.fc1.weight.data.size()[0])
         T.nn.init.uniform_(self.fc1.weight.data, -f1, f1)
@@ -260,12 +260,24 @@ class Agent(object):
     def choose_action(self, observation):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
-        mu = self.actor.forward(observation).to(self.actor.device)
-        # clip is done below to still keep actions in tanh range after adding noise to greedy action
-        mu_prime = T.clip(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device), min=-1, max=+1) 
-        mu_prime.to(self.actor.device)
+        mu = self.actor.forward(observation)
         self.actor.train()
-        return mu_prime.cpu().detach().numpy()
+        exp_noise = T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
+        mu += exp_noise
+        mu = T.clamp(mu, min=-1, max=1)
+        # with T.no_grad():
+        #     mu = self.actor.forward(observation).cpu().detach().numpy()
+        # exp_noise = self.noise()
+
+        # mu_prime = np.clip(mu + exp_noise, -1, +1)
+        
+        # mu_prime = T.clip(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device), min=-1, max=+1)
+        # mu_prime = T.tanh(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device))
+        # mu_prime = mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
+        # print(f'mu: {mu} mu_prime: {mu_prime}') 
+        # mu_prime.to(self.actor.device)
+        
+        return mu.cpu().detach().numpy()
 
 
     def remember(self, state, action, reward, new_state, done):
@@ -286,6 +298,8 @@ class Agent(object):
         self.target_actor.eval()
         self.target_critic.eval()
         self.critic.eval()
+
+        # with T.no_grad():
         target_actions = self.target_actor.forward(new_state)
         critic_value_ = self.target_critic.forward(new_state, target_actions)
         critic_value = self.critic.forward(state, action)
@@ -298,7 +312,7 @@ class Agent(object):
 
         self.critic.train()
         self.critic.optimizer.zero_grad()
-        critic_loss = F.mse_loss(target, critic_value)
+        critic_loss = F.mse_loss(critic_value, target) # earlier was targer-critic
 
         critic_loss_copy = critic_loss.detach().clone()
         self.critic_loss_step = critic_loss_copy.cpu().numpy()
@@ -312,12 +326,11 @@ class Agent(object):
         self.actor.train()
         actor_loss = -self.critic.forward(state, mu)
         actor_loss = T.mean(actor_loss)
+        actor_loss.backward()
+        self.actor.optimizer.step()
 
         actor_loss_copy = actor_loss.detach().clone()
         self.actor_loss_step = actor_loss_copy.cpu().numpy()
-
-        actor_loss.backward()
-        self.actor.optimizer.step()
 
         self.update_network_parameters()
         
