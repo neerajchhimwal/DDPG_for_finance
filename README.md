@@ -8,13 +8,13 @@ conda activate ddpg_torch_gym
 pip install -r requirements.txt
 ```
 
-Install pytorch and cuda based on version:
+Install pytorch based on system from [here](https://pytorch.org/get-started/locally/):
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 ```
 
-weights and biases initialization:
-  - run '_wandb login_'
+Make sure you have an active weights and biases initialization:
+  - run '_wandb login_' on terminal
 
 
 ## For training on stock market data
