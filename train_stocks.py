@@ -205,9 +205,6 @@ for i in range(starting_episode, TOTAL_EPISODES):
 
 
 
-filename = f'{ENV_NAME}-alpha{str(ACTOR_LR)}-beta{str(CRITIC_LR)}batch_{BATCH_SIZE}-400-300.png'
-plotLearning(score_history, filename, window=10)
-
 # TRADING
 '''
 insample_risk_indicator = train.drop_duplicates(subset=['date'])
