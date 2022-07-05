@@ -35,7 +35,9 @@ TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_D
 TEST_CSV_NAME =  f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{TRADE_START_DATE}_to_{TRADE_END_DATE}.csv'
 
-TOTAL_EPISODES = 250
+BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
+
+TOTAL_EPISODES = 300
 SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 10
 SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES = 10
 
