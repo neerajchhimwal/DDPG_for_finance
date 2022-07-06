@@ -12,11 +12,11 @@ from finrl.finrl_meta.preprocessor.yahoodownloader import YahooDownloader
 from finrl.finrl_meta.preprocessor.preprocessors import data_split
 from trade_stocks import trade_on_test_df
 import os
-
+from plot import get_comparison_df
 import warnings
 warnings.filterwarnings("ignore")
 
-ENV_NAME = 'stock_tr_scaled_actions'
+ENV_NAME = 'stock_linux'
 
 # DATA
 
@@ -180,6 +180,13 @@ for i in range(starting_episode, TOTAL_EPISODES):
         df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs)
         print('results table....')
         print(df_account_value.head())
+        results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING)
+        train_values = np.zeros(len(results_df))
+        train_values[list(results_df.metric).index('Cumulative returns')] = cumulative_rewards_per_step_this_episode[-1]
+        train_values[list(results_df.metric).index('Max drawdown')] = min(cumulative_rewards_per_step_this_episode)
+        results_df['train_data'] = train_values
+
+        # saving
         results_dir = './results'
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
@@ -188,20 +195,11 @@ for i in range(starting_episode, TOTAL_EPISODES):
         results_table_name = f'return_comparison_episode_{i}.csv'
         df_account_value.to_csv(os.path.join(results_dir, account_value_csv_name))
         df_actions.to_csv(os.path.join(results_dir, actions_csv_name))
-
-        df = pd.DataFrame(data=[cumulative_rewards_test[-1], max(cumulative_rewards_test), min(cumulative_rewards_test)],
-                        columns=[f'test [{TEST_START_DATE}_{TEST_END_DATE}]'],
-                        index=['Cumulative Return', 'Max Cumulative return', 'Min cumulative return'])
-
-        df[f'train [{TRAIN_START_DATE}_{TRAIN_END_DATE}]'] = [cumulative_rewards_per_step_this_episode[-1], 
-                                                            max(cumulative_rewards_per_step_this_episode),
-                                                            min(cumulative_rewards_per_step_this_episode)]
-        df.to_csv(os.path.join(results_dir, results_table_name))
-
+        results_df.to_csv(os.path.join(results_dir, results_table_name))
+        # logging
         if USE_WANDB:
-            df.reset_index(inplace=True)
-            res_table = wandb.Table(dataframe=df) 
-            run.log({f'Cumulative returns Episode {i}': res_table})
+            res_table = wandb.Table(dataframe=results_df) 
+            run.log({f'Results Episode {i}': res_table})
             
     
 

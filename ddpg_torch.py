@@ -312,8 +312,8 @@ class Agent(object):
 
         self.critic.train()
         self.critic.optimizer.zero_grad()
-        critic_loss = F.mse_loss(critic_value, target) # earlier was targer-critic
-
+        critic_loss = F.mse_loss(critic_value, target)
+        
         critic_loss_copy = critic_loss.detach().clone()
         self.critic_loss_step = critic_loss_copy.cpu().numpy()
 
@@ -324,8 +324,10 @@ class Agent(object):
         self.actor.optimizer.zero_grad()
         mu = self.actor.forward(state)
         self.actor.train()
-        actor_loss = -self.critic.forward(state, mu)
-        actor_loss = T.mean(actor_loss)
+        # actor_loss = -self.critic.forward(state, mu)
+        # actor_loss = T.mean(actor_loss)
+        actor_gradients = -self.critic.forward(state, mu)
+        actor_loss = T.mean(actor_gradients)
         actor_loss.backward()
         self.actor.optimizer.step()
 
