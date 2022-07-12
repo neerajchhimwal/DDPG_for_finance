@@ -311,24 +311,33 @@ class Agent(object):
         target = target.view(self.batch_size, 1)
 
         self.critic.train()
-        self.critic.optimizer.zero_grad()
+
         critic_loss = F.mse_loss(critic_value, target)
         
         critic_loss_copy = critic_loss.detach().clone()
         self.critic_loss_step = critic_loss_copy.cpu().numpy()
 
+        # backward
+        self.critic.optimizer.zero_grad()
         critic_loss.backward()
+
+        # step
         self.critic.optimizer.step()
 
         self.critic.eval()
-        self.actor.optimizer.zero_grad()
+        
         mu = self.actor.forward(state)
         self.actor.train()
         # actor_loss = -self.critic.forward(state, mu)
         # actor_loss = T.mean(actor_loss)
         actor_gradients = -self.critic.forward(state, mu)
         actor_loss = T.mean(actor_gradients)
+
+        # backward
+        self.actor.optimizer.zero_grad()
         actor_loss.backward()
+
+        # step
         self.actor.optimizer.step()
 
         actor_loss_copy = actor_loss.detach().clone()
@@ -404,3 +413,15 @@ class Agent(object):
         self.critic.load_checkpoint()
         self.target_critic.load_checkpoint()
         self.episode = self.target_critic.episode
+
+    def set_train(self):
+        self.actor.train()
+        self.critic.train()
+        self.target_actor.train()
+        self.target_critic.train()
+
+    def set_eval(self):
+        self.actor.eval()
+        self.critic.eval()
+        self.target_actor.eval()
+        self.target_critic.eval()

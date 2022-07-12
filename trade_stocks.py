@@ -1,5 +1,5 @@
 from stock_trading_env import StockTradingEnv
-
+import torch
 
 def get_prediction(model, environment, initial_amount):
     test_obs = environment.reset()
@@ -9,7 +9,8 @@ def get_prediction(model, environment, initial_amount):
 
     # test_env.reset()
     for i in range(len(environment.df.index.unique())):
-        act = model.choose_action(test_obs)
+        with torch.no_grad():
+            act = model.choose_action(test_obs)
         new_state, reward, done, info = environment.step(act)
         cumulative_reward = (environment.asset_memory[-1] - initial_amount) / initial_amount
         cumulative_reward_per_day.append(cumulative_reward)
