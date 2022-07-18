@@ -15,8 +15,10 @@ import os
 from plot import get_comparison_df
 import warnings
 warnings.filterwarnings("ignore")
+import random
+import torch
 
-ENV_NAME = 'stock_linux'
+ENV_NAME = 'stock_tr_scaled_actions'
 
 # DATA
 
@@ -71,6 +73,11 @@ env_kwargs = {
 }
 
 env = StockTradingEnv(df = train, **env_kwargs)
+
+np.random.seed(SEED)
+env.seed(SEED)
+torch.manual_seed(SEED)
+random.seed(SEED)
 # print('Asset: ', env.asset_memory)
 # log
 w_config = dict(
@@ -104,7 +111,7 @@ w_config = dict(
   ticker_list_name = ticker_name_from_config_tickers
 )
 
-PROJECT_NAME = f"pytorch_ddpg_{ENV_NAME.lower()}"
+PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
 
 if USE_WANDB:
     run = wandb.init(project=PROJECT_NAME, tags=["DDPG", "RL"], config=w_config, job_type='train_model') #, resume=RESUME_LAST_WANDB_RUN)
@@ -112,7 +119,7 @@ if USE_WANDB:
 
 
 agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, input_dims=state_space, tau=TAU, env=ENV_NAME,
-              batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=50000,
+              batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=100000,
               n_actions=stock_dimension)
 
 starting_episode = 0
@@ -120,8 +127,6 @@ if not TRAIN_FROM_SCRATCH:
     agent.load_models()
     starting_episode = agent.episode + 1
  
-np.random.seed(SEED)
-
 day_counter_total = 0
 score_history = []
 for i in range(starting_episode, TOTAL_EPISODES):
@@ -156,7 +161,16 @@ for i in range(starting_episode, TOTAL_EPISODES):
         score += reward
         obs = new_state
         # env.render()
-    
+    print('$'*100)
+    cr_lr = agent.critic.optimizer.state_dict()['param_groups'][0]['lr']
+    ac_lr = agent.actor.optimizer.state_dict()['param_groups'][0]['lr']
+    print(f"Episode {i}, critic LR: {cr_lr}, critic loss: {critic_loss_per_episode}")
+    print(f"Episode {i},  actor LR: {ac_lr},   actor loss: {actor_loss_per_episode}")
+    print('$'*100)
+    # agent.critic.scheduler.step(critic_loss_per_episode)
+    agent.critic.scheduler.step()
+    agent.actor.scheduler.step()
+
     score_history.append(score)
     if USE_WANDB:
         run.log({'steps per episode': step_count, 'episode': i})
@@ -165,9 +179,12 @@ for i in range(starting_episode, TOTAL_EPISODES):
         run.log({'Actor loss': actor_loss_per_episode, 'episode': i})
         run.log({'Critic loss': critic_loss_per_episode, 'episode': i})
 
+        run.log({'Actor LR': ac_lr, 'episode': i})
+        run.log({'Critic LR': cr_lr, 'episode': i})
+
     
     if i % SAVE_CKP_AFTER_EVERY_NUM_EPISODES == 0 or i==TOTAL_EPISODES-1:
-       agent.save_models()
+        agent.save_models()
     # print('='*50)
     # print('episode ', i, 'reward %.2f' % score)
     # print('='*50)
@@ -176,10 +193,10 @@ for i in range(starting_episode, TOTAL_EPISODES):
     
 
 
-    if i % SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES == 0 or i==TOTAL_EPISODES-1:
-        df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs)
-        print('results table....')
-        print(df_account_value.head())
+    if i == TOTAL_EPISODES-1 or i % SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES == 0:
+        df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs)
+        # print('results table....')
+        # print(df_account_value.head())
         results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING)
         train_values = np.zeros(len(results_df))
         train_values[list(results_df.metric).index('Cumulative returns')] = cumulative_rewards_per_step_this_episode[-1]
@@ -187,7 +204,7 @@ for i in range(starting_episode, TOTAL_EPISODES):
         results_df['train_data'] = train_values
 
         # saving
-        results_dir = './results'
+        results_dir = './results_lr_schedule_grad_clip_critic_2016_2020_may_run_2'
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
         account_value_csv_name = f'account_value_test_episode_{i}.csv'
@@ -200,6 +217,31 @@ for i in range(starting_episode, TOTAL_EPISODES):
         if USE_WANDB:
             res_table = wandb.Table(dataframe=results_df) 
             run.log({f'Results Episode {i}': res_table})
+
+    # if i==TOTAL_EPISODES-1:
+    #     df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs)
+    #     print('results table....')
+    #     print(df_account_value.head())
+    #     results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING)
+    #     train_values = np.zeros(len(results_df))
+    #     train_values[list(results_df.metric).index('Cumulative returns')] = cumulative_rewards_per_step_this_episode[-1]
+    #     train_values[list(results_df.metric).index('Max drawdown')] = min(cumulative_rewards_per_step_this_episode)
+    #     results_df['train_data'] = train_values
+
+    #     # saving
+    #     results_dir = './results'
+    #     if not os.path.exists(results_dir):
+    #         os.makedirs(results_dir)
+    #     account_value_csv_name = f'account_value_trade_episode_{i}.csv'
+    #     actions_csv_name = f'daily_actions_trade_episode_{i}.csv'
+    #     results_table_name = f'return_comparison_trade_episode_{i}.csv'
+    #     df_account_value.to_csv(os.path.join(results_dir, account_value_csv_name))
+    #     df_actions.to_csv(os.path.join(results_dir, actions_csv_name))
+    #     results_df.to_csv(os.path.join(results_dir, results_table_name))
+    #     # logging
+    #     if USE_WANDB:
+    #         res_table = wandb.Table(dataframe=results_df) 
+    #         run.log({f'Results Episode {i}': res_table})
             
     
 

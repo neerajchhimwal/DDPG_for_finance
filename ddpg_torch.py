@@ -116,6 +116,9 @@ class CriticNetwork(nn.Module):
         T.nn.init.uniform_(self.q.bias.data, -f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
+        # self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=3, verbose=True, factor=0.1)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+
         self.device = T.device(DEVICE)
         self.episode = 0
         self.to(self.device)
@@ -184,6 +187,8 @@ class ActorNetwork(nn.Module):
         T.nn.init.uniform_(self.mu.bias.data, -f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+
         self.device = T.device(DEVICE)
         self.episode = 0
         self.to(self.device)
@@ -321,9 +326,11 @@ class Agent(object):
         self.critic.optimizer.zero_grad()
         critic_loss.backward()
 
+        # grad clip
+        clipping_value = 1
+        T.nn.utils.clip_grad_norm_(self.critic.parameters(), clipping_value)
         # step
         self.critic.optimizer.step()
-
         self.critic.eval()
         
         mu = self.actor.forward(state)
@@ -337,7 +344,7 @@ class Agent(object):
         self.actor.optimizer.zero_grad()
         actor_loss.backward()
 
-        # step
+        # step                                   
         self.actor.optimizer.step()
 
         actor_loss_copy = actor_loss.detach().clone()
