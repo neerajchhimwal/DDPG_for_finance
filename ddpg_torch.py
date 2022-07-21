@@ -7,7 +7,7 @@ import numpy as np
 import json
 
 from config import DEVICE, sigma, theta, dt
-from config import CHECKPOINT_DIR
+from config import CHECKPOINT_DIR, LR_SCHEDULE_STEP_SIZE
 import os
 
 class OUActionNoise(object):
@@ -115,9 +115,9 @@ class CriticNetwork(nn.Module):
         T.nn.init.uniform_(self.q.weight.data, -f3, f3)
         T.nn.init.uniform_(self.q.bias.data, -f3, f3)
 
-        self.optimizer = optim.Adam(self.parameters(), lr=beta)
+        self.optimizer = optim.Adam(self.parameters(), lr=beta, weight_decay=1e-2)
         # self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=3, verbose=True, factor=0.1)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE, gamma=0.5)
 
         self.device = T.device(DEVICE)
         self.episode = 0
@@ -187,7 +187,7 @@ class ActorNetwork(nn.Module):
         T.nn.init.uniform_(self.mu.bias.data, -f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE, gamma=0.5)
 
         self.device = T.device(DEVICE)
         self.episode = 0
@@ -238,7 +238,7 @@ class Agent(object):
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
         self.batch_size = batch_size
         self.n_actions = n_actions
-
+        self.checkpoint_dir = CHECKPOINT_DIR
         self.actor = ActorNetwork(alpha, input_dims, layer1_size,
                                   layer2_size, n_actions=n_actions,
                                   name='Actor')
@@ -293,7 +293,7 @@ class Agent(object):
             return
         state, action, reward, new_state, done = \
                                       self.memory.sample_buffer(self.batch_size)
-
+                                      
         reward = T.tensor(reward, dtype=T.float).to(self.critic.device)
         done = T.tensor(done).to(self.critic.device)
         new_state = T.tensor(new_state, dtype=T.float).to(self.critic.device)
@@ -304,6 +304,8 @@ class Agent(object):
         self.target_critic.eval()
         self.critic.eval()
 
+        self.critic.optimizer.zero_grad()
+        self.actor.optimizer.zero_grad()
         # with T.no_grad():
         target_actions = self.target_actor.forward(new_state)
         critic_value_ = self.target_critic.forward(new_state, target_actions)
@@ -323,7 +325,7 @@ class Agent(object):
         self.critic_loss_step = critic_loss_copy.cpu().numpy()
 
         # backward
-        self.critic.optimizer.zero_grad()
+        # self.critic.optimizer.zero_grad()
         critic_loss.backward()
 
         # grad clip
@@ -341,8 +343,11 @@ class Agent(object):
         actor_loss = T.mean(actor_gradients)
 
         # backward
-        self.actor.optimizer.zero_grad()
+        # self.actor.optimizer.zero_grad()
         actor_loss.backward()
+
+        # grad clip
+        T.nn.utils.clip_grad_norm_(self.actor.parameters(), clipping_value)
 
         # step                                   
         self.actor.optimizer.step()
@@ -382,22 +387,6 @@ class Agent(object):
 
         self.target_actor.load_state_dict(target_actor_dict_temp)
 
-        '''
-        #Verify that the copy assignment worked correctly
-        target_actor_params = self.target_actor.named_parameters()
-        target_critic_params = self.target_critic.named_parameters()
-        critic_state_dict = dict(target_critic_params)
-        actor_state_dict = dict(target_actor_params)
-        
-        print('\nActor Networks', tau)
-        for name, param in self.actor.named_parameters():
-            print(name, T.equal(param, actor_state_dict[name]))
-        print('\nCritic Networks', tau)
-        for name, param in self.critic.named_parameters():
-            print(name, T.equal(param, critic_state_dict[name]))
-        
-        input()
-        '''
 
     def save_models(self):
         '''
@@ -420,6 +409,77 @@ class Agent(object):
         self.critic.load_checkpoint()
         self.target_critic.load_checkpoint()
         self.episode = self.target_critic.episode
+
+    def save_checkpoint(self, last_episode):
+        """
+        Saving the networks and all parameters to a file in 'checkpoint_dir'
+        
+        """
+        checkpoint_name = os.path.join(self.checkpoint_dir, 'agent_ep_{}.pt'.format(last_episode))
+        noise_name = os.path.join(self.checkpoint_dir, 'noise_ep_{}.npy'.format(last_episode))
+
+        print('Saving checkpoint...')
+        checkpoint = {
+            'last_episode': last_episode,
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'target_actor': self.target_actor.state_dict(),
+            'target_critic': self.target_critic.state_dict(),
+            'actor_optimizer': self.actor.optimizer.state_dict(),
+            'critic_optimizer': self.critic.optimizer.state_dict(),
+            'replay_buffer': self.memory
+        }
+        print('Saving agent at episode {}...'.format(last_episode))
+        T.save(checkpoint, checkpoint_name)
+
+        print('Saving noise at episode {} as {}...'.format(last_episode, noise_name))
+        np.save(noise_name, self.noise)
+
+    def get_paths_of_latest_files(self):
+        """
+        Returns the latest created agent and noise files in 'checkpoint_dir'
+        """
+        ckp_files = [file for file in os.listdir(self.checkpoint_dir) if file.endswith(".pt")]
+        ckp_filepaths = [os.path.join(self.checkpoint_dir, file) for file in ckp_files]
+        last_ckp_file = max(ckp_filepaths, key=os.path.getctime)
+
+        noise_files = [file for file in os.listdir(self.checkpoint_dir) if file.endswith(".npy")]
+        noise_filepaths = [os.path.join(self.checkpoint_dir, file) for file in noise_files]
+        last_noise_file = max(noise_filepaths, key=os.path.getctime)
+
+        return os.path.abspath(last_ckp_file), os.path.abspath(last_noise_file)
+
+    def load_checkpoint(self, checkpoint_path=None):
+        """
+        Saving the networks and all parameters from a given path. If the given path is None
+        then the latest saved file in 'checkpoint_dir' will be used.
+        Arguments:
+            checkpoint_path:    File to load the model from
+        """
+
+        if checkpoint_path is None:
+            checkpoint_path, noise_path = self.get_paths_of_latest_files()
+
+        if os.path.isfile(checkpoint_path):
+            print("Loading checkpoint...({})".format(checkpoint_path))
+
+            checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
+            start_episode = checkpoint['last_episode'] + 1
+            self.actor.load_state_dict(checkpoint['actor'])
+            self.critic.load_state_dict(checkpoint['critic'])
+            self.target_actor.load_state_dict(checkpoint['target_actor'])
+            self.target_critic.load_state_dict(checkpoint['target_critic'])
+            self.actor.optimizer.load_state_dict(checkpoint['actor_optimizer'])
+            self.critic.optimizer.load_state_dict(checkpoint['critic_optimizer'])
+            self.memory = checkpoint['replay_buffer']
+
+            self.noise = np.load(noise_path)
+
+            print('Loaded model at episode {} from {}'.format(start_episode, checkpoint_path))
+            print('Loaded noise from {}'.format(noise_path))
+            return start_episode
+        else:
+            raise OSError('Checkpoint not found')
 
     def set_train(self):
         self.actor.train()

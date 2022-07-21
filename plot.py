@@ -66,6 +66,7 @@ def backtest_plot(
             returns=test_returns, benchmark_rets=baseline_returns, set_context=False
         )
 
+    return test_returns, baseline_returns
 
 def get_baseline(ticker, start, end):
     return YahooDownloader(
