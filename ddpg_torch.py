@@ -115,7 +115,7 @@ class CriticNetwork(nn.Module):
         T.nn.init.uniform_(self.q.weight.data, -f3, f3)
         T.nn.init.uniform_(self.q.bias.data, -f3, f3)
 
-        self.optimizer = optim.Adam(self.parameters(), lr=beta, weight_decay=1e-2)
+        self.optimizer = optim.Adam(self.parameters(), lr=beta)
         # self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=3, verbose=True, factor=0.1)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE, gamma=0.5)
 
