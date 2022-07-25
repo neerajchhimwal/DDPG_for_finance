@@ -9,6 +9,7 @@ import json
 from config import DEVICE, sigma, theta, dt
 from config import CHECKPOINT_DIR, LR_SCHEDULE_STEP_SIZE
 import os
+import wandb
 
 class OUActionNoise(object):
     '''
@@ -226,7 +227,7 @@ class ActorNetwork(nn.Module):
         
 
 class Agent(object):
-    def __init__(self, alpha, beta, input_dims, tau, env, gamma=0.99,
+    def __init__(self, alpha, beta, input_dims, tau, ckp_dir, gamma=0.99,
                  n_actions=2, max_size=1000000, layer1_size=400,
                  layer2_size=300, batch_size=64):
 
@@ -238,7 +239,7 @@ class Agent(object):
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
         self.batch_size = batch_size
         self.n_actions = n_actions
-        self.checkpoint_dir = CHECKPOINT_DIR
+        self.checkpoint_dir = ckp_dir
         self.actor = ActorNetwork(alpha, input_dims, layer1_size,
                                   layer2_size, n_actions=n_actions,
                                   name='Actor')
@@ -410,13 +411,17 @@ class Agent(object):
         self.target_critic.load_checkpoint()
         self.episode = self.target_critic.episode
 
-    def save_checkpoint(self, last_episode):
+    def save_checkpoint(self, last_episode, checkpoint_name=None, save_noise=False):
         """
         Saving the networks and all parameters to a file in 'checkpoint_dir'
         
         """
-        checkpoint_name = os.path.join(self.checkpoint_dir, 'agent_ep_{}.pt'.format(last_episode))
-        noise_name = os.path.join(self.checkpoint_dir, 'noise_ep_{}.npy'.format(last_episode))
+        if checkpoint_name is None:
+            checkpoint_name = os.path.join(self.checkpoint_dir, 'agent_ep_{}.pt'.format(last_episode))
+        else:
+            checkpoint_name = os.path.join(self.checkpoint_dir, checkpoint_name)
+        if save_noise:
+            noise_name = os.path.join(self.checkpoint_dir, 'noise_ep_{}.npy'.format(last_episode))
 
         print('Saving checkpoint...')
         checkpoint = {
@@ -432,10 +437,11 @@ class Agent(object):
         print('Saving agent at episode {}...'.format(last_episode))
         T.save(checkpoint, checkpoint_name)
 
-        print('Saving noise at episode {} as {}...'.format(last_episode, noise_name))
-        np.save(noise_name, self.noise)
+        if save_noise:
+            print('Saving noise at episode {} as {}...'.format(last_episode, noise_name))
+            np.save(noise_name, self.noise)
 
-    def get_paths_of_latest_files(self):
+    def get_paths_of_latest_files(self, load_noise=False):
         """
         Returns the latest created agent and noise files in 'checkpoint_dir'
         """
@@ -443,13 +449,16 @@ class Agent(object):
         ckp_filepaths = [os.path.join(self.checkpoint_dir, file) for file in ckp_files]
         last_ckp_file = max(ckp_filepaths, key=os.path.getctime)
 
-        noise_files = [file for file in os.listdir(self.checkpoint_dir) if file.endswith(".npy")]
-        noise_filepaths = [os.path.join(self.checkpoint_dir, file) for file in noise_files]
-        last_noise_file = max(noise_filepaths, key=os.path.getctime)
+        noise_p = ''
+        if load_noise:
+            noise_files = [file for file in os.listdir(self.checkpoint_dir) if file.endswith(".npy")]
+            noise_filepaths = [os.path.join(self.checkpoint_dir, file) for file in noise_files]
+            last_noise_file = max(noise_filepaths, key=os.path.getctime)
+            noise_p = os.path.abspath(last_noise_file)
 
-        return os.path.abspath(last_ckp_file), os.path.abspath(last_noise_file)
+        return os.path.abspath(last_ckp_file), noise_p
 
-    def load_checkpoint(self, checkpoint_path=None):
+    def load_checkpoint(self, checkpoint_path=None, load_noise=False):
         """
         Saving the networks and all parameters from a given path. If the given path is None
         then the latest saved file in 'checkpoint_dir' will be used.
@@ -458,12 +467,12 @@ class Agent(object):
         """
 
         if checkpoint_path is None:
-            checkpoint_path, noise_path = self.get_paths_of_latest_files()
+            checkpoint_path, noise_path = self.get_paths_of_latest_files(load_noise)
 
         if os.path.isfile(checkpoint_path):
             print("Loading checkpoint...({})".format(checkpoint_path))
 
-            checkpoint = torch.load(checkpoint_path, map_location=DEVICE)
+            checkpoint = T.load(checkpoint_path, map_location=DEVICE)
             start_episode = checkpoint['last_episode'] + 1
             self.actor.load_state_dict(checkpoint['actor'])
             self.critic.load_state_dict(checkpoint['critic'])
@@ -473,10 +482,11 @@ class Agent(object):
             self.critic.optimizer.load_state_dict(checkpoint['critic_optimizer'])
             self.memory = checkpoint['replay_buffer']
 
-            self.noise = np.load(noise_path)
+            if load_noise:
+                self.noise = np.load(noise_path)
+                print('Loaded noise from {}'.format(noise_path))
 
             print('Loaded model at episode {} from {}'.format(start_episode, checkpoint_path))
-            print('Loaded noise from {}'.format(noise_path))
             return start_episode
         else:
             raise OSError('Checkpoint not found')
@@ -492,3 +502,81 @@ class Agent(object):
         self.critic.eval()
         self.target_actor.eval()
         self.target_critic.eval()
+
+    def train_model(self, 
+                    total_episodes, 
+                    train_from_scratch, 
+                    env, 
+                    env_kwargs, 
+                    ckp_save_freq, 
+                    predict_on_test=False, 
+                    test_reward_table_save_freq=10,
+                    use_wandb=False,
+                    wandb_config=None,
+                    wandb_project_name=None,
+                    save_ckp=False):
+
+        if use_wandb:
+            run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model')
+
+        starting_episode = 0
+        if not train_from_scratch:
+            starting_episode = self.load_checkpoint()
+        
+        day_counter_total = 0
+        score_history = []
+        for i in range(starting_episode, total_episodes):
+            obs = env.reset()
+            self.noise.reset()
+            done = False
+            score = 0
+            step_count = 0
+            actor_loss_per_episode = 0
+            critic_loss_per_episode = 0
+            # actor_loss_per_episode = []
+            # critic_loss_per_episode = []
+            self.episode = i
+            cumulative_rewards_per_step_this_episode = []
+            while not done:
+                act = self.choose_action(obs)
+                new_state, reward, done, info = env.step(act)
+                self.remember(obs, act, reward, new_state, int(done))
+                self.learn()
+                step_count += 1
+                cumulative_reward = (env.asset_memory[-1] - env_kwargs['initial_amount']) / env_kwargs['initial_amount']
+                cumulative_rewards_per_step_this_episode.append(cumulative_reward)
+                if use_wandb:
+                    run.log({'Cumulative returns': cumulative_reward, 'days':day_counter_total})
+                day_counter_total += 1
+                
+                actor_loss_per_episode += self.actor_loss_step
+                critic_loss_per_episode += self.critic_loss_step
+                score += reward
+                obs = new_state
+
+            # print('$'*100)
+            # cr_lr = self.critic.optimizer.state_dict()['param_groups'][0]['lr']
+            # ac_lr = self.actor.optimizer.state_dict()['param_groups'][0]['lr']
+            # print(f"Episode {i}, critic LR: {cr_lr}, critic loss: {critic_loss_per_episode}")
+            # print(f"Episode {i},  actor LR: {ac_lr},   actor loss: {actor_loss_per_episode}")
+            # print('$'*100)
+            
+            self.critic.scheduler.step()
+            self.actor.scheduler.step()
+
+            score_history.append(score)
+            if use_wandb:
+                run.log({'steps per episode': step_count, 'episode': i})
+                run.log({'reward': score, 'episode': i})
+                # run.log({'reward avg 100 games': np.mean(score_history[-100:]), 'episode': i})
+                run.log({'Actor loss': actor_loss_per_episode, 'episode': i})
+                run.log({'Critic loss': critic_loss_per_episode, 'episode': i})
+
+                # run.log({'Actor LR': ac_lr, 'episode': i})
+                # run.log({'Critic LR': cr_lr, 'episode': i})
+            
+            if save_ckp:
+                if (i % ckp_save_freq == 0 or i == total_episodes-1):
+                    self.save_checkpoint(last_episode=i)
+
+        return self

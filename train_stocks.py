@@ -111,14 +111,19 @@ w_config = dict(
   ticker_list_name = ticker_name_from_config_tickers
 )
 
-PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
+# PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
+PROJECT_NAME = "ddpg_tuned_dji"
 
 if USE_WANDB:
     run = wandb.init(project=PROJECT_NAME, tags=["DDPG", "RL"], config=w_config, job_type='train_model') #, resume=RESUME_LAST_WANDB_RUN)
 
 
 
-agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, input_dims=state_space, tau=TAU, env=ENV_NAME,
+# agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, input_dims=state_space, tau=TAU, env=ENV_NAME,
+#               batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=100000,
+#               n_actions=stock_dimension)
+
+agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=CHECKPOINT_DIR, input_dims=state_space, tau=TAU,
               batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=100000,
               n_actions=stock_dimension)
 
@@ -207,7 +212,7 @@ for i in range(starting_episode, TOTAL_EPISODES):
         results_df['train_data'] = train_values
 
         # saving
-        results_dir = './results_training_from_2009_to_jun_2020'
+        results_dir = './results_after_tuning'
         # results_dir = './results_lr_schedule_step_10_grad_clip_small_nw_400_400_2016_2022_may'
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
