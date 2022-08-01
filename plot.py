@@ -7,8 +7,8 @@ import pandas as pd
 import pyfolio
 from pyfolio import timeseries
 
-from finrl import config
-from finrl.finrl_meta.preprocessor.yahoodownloader import YahooDownloader
+# from finrl import config
+from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 
 
 def get_daily_return(df, value_col_name="account_value"):
@@ -43,8 +43,8 @@ def backtest_stats(account_value, value_col_name="account_value"):
 
 def backtest_plot(
         account_value,
-        baseline_start=config.TRADE_START_DATE,
-        baseline_end=config.TRADE_END_DATE,
+        baseline_start,
+        baseline_end,
         baseline_ticker="^DJI",
         value_col_name="account_value",
 ):
@@ -61,10 +61,10 @@ def backtest_plot(
     baseline_df = baseline_df.fillna(method="ffill").fillna(method="bfill")
     baseline_returns = get_daily_return(baseline_df, value_col_name="close")
 
-    with pyfolio.plotting.plotting_context(font_scale=1.1):
-        pyfolio.create_full_tear_sheet(
-            returns=test_returns, benchmark_rets=baseline_returns, set_context=False
-        )
+    # with pyfolio.plotting.plotting_context(font_scale=1.1):
+    #     pyfolio.create_full_tear_sheet(
+    #         returns=test_returns, benchmark_rets=baseline_returns, set_context=False
+    #     )
 
     return test_returns, baseline_returns
 

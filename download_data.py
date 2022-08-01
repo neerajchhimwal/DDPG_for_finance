@@ -1,6 +1,6 @@
 import config, config_tickers
-from finrl.finrl_meta.preprocessor.yahoodownloader import YahooDownloader
-from finrl.finrl_meta.preprocessor.preprocessors import FeatureEngineer, data_split
+from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
+from finrl.meta.preprocessor.preprocessors import FeatureEngineer, data_split
 
 import numpy as np
 import pandas as pd

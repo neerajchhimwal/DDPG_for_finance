@@ -8,8 +8,8 @@ from config import *
 import config_tickers
 from download_data import process_data
 from stock_trading_env import StockTradingEnv
-from finrl.finrl_meta.preprocessor.yahoodownloader import YahooDownloader
-from finrl.finrl_meta.preprocessor.preprocessors import data_split
+from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
+from finrl.meta.preprocessor.preprocessors import data_split
 from trade_stocks import trade_on_test_df
 import os
 from plot import get_comparison_df

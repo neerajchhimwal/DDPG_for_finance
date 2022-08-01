@@ -2,14 +2,14 @@ from ddpg_torch import Agent
 import gym
 import numpy as np
 import pandas as pd
-from utils import plotLearning
+from utils import sample_data_for_every_nth_day_of_the_month
 import wandb
 from config import *
 import config_tickers
 from download_data import process_data
 from stock_trading_env import StockTradingEnv
-from finrl.finrl_meta.preprocessor.yahoodownloader import YahooDownloader
-from finrl.finrl_meta.preprocessor.preprocessors import data_split
+from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
+from finrl.meta.preprocessor.preprocessors import data_split
 from trade_stocks import trade_on_test_df
 import os
 from plot import get_comparison_df
@@ -51,6 +51,13 @@ else:
     trade = pd.read_csv(TRADE_CSV_NAME, index_col='Unnamed: 0')
     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
+
+if USE_MONTHLY_DATA:
+    train = sample_data_for_every_nth_day_of_the_month(df=train, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
+    trade = sample_data_for_every_nth_day_of_the_month(df=trade, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
+    test = sample_data_for_every_nth_day_of_the_month(df=test, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
+    print('Shapes after converting from daily to monthly')
+    print(f'Train shape: {train.shape} Trade shape: {trade.shape} Test shape {test.shape}')
 
 # env
 stock_dimension = len(train.tic.unique())
@@ -108,11 +115,13 @@ w_config = dict(
   train_csv = TRAIN_CSV_NAME,
   trade_csv = TRADE_CSV_NAME,
   seed = SEED,
-  ticker_list_name = ticker_name_from_config_tickers
+  ticker_list_name = ticker_name_from_config_tickers,
+  use_monthly_data = USE_MONTHLY_DATA,
+  date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS
 )
 
 # PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
-PROJECT_NAME = "ddpg_tuned_dji"
+PROJECT_NAME = "ddpg_tuned_dji_linux"
 
 if USE_WANDB:
     run = wandb.init(project=PROJECT_NAME, tags=["DDPG", "RL"], config=w_config, job_type='train_model') #, resume=RESUME_LAST_WANDB_RUN)
@@ -124,7 +133,7 @@ if USE_WANDB:
 #               n_actions=stock_dimension)
 
 agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=CHECKPOINT_DIR, input_dims=state_space, tau=TAU,
-              batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=100000,
+              batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=BUFFER_SIZE,
               n_actions=stock_dimension)
 
 starting_episode = 0
@@ -201,8 +210,8 @@ for i in range(starting_episode, TOTAL_EPISODES):
     
     # test cumulative returns on test set
 
-    if i == TOTAL_EPISODES-1 or i % SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES == 0:
-        df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs)
+    if i == TOTAL_EPISODES-1:
+        df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
         # print('results table....')
         # print(df_account_value.head())
         results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING)
@@ -211,8 +220,13 @@ for i in range(starting_episode, TOTAL_EPISODES):
         train_values[list(results_df.metric).index('Max drawdown')] = min(cumulative_rewards_per_step_this_episode)
         results_df['train_data'] = train_values
 
+        df_account_value_22, df_actions_22, cumulative_rewards_test_22 = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
+        results_df_22 = get_comparison_df(df_account_value_22, BASELINE_TICKER_NAME_BACKTESTING)
+        
+        results_df_22['train_data'] = train_values
+
         # saving
-        results_dir = './results_after_tuning'
+        results_dir = f'./results/monthly_data_seed_{SEED}_run_2'
         # results_dir = './results_lr_schedule_step_10_grad_clip_small_nw_400_400_2016_2022_may'
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
@@ -222,9 +236,17 @@ for i in range(starting_episode, TOTAL_EPISODES):
         df_account_value.to_csv(os.path.join(results_dir, account_value_csv_name))
         df_actions.to_csv(os.path.join(results_dir, actions_csv_name))
         results_df.to_csv(os.path.join(results_dir, results_table_name))
+
+        df_account_value_22.to_csv(os.path.join(results_dir, account_value_csv_name.replace('.csv', '_22.csv')))
+        df_actions_22.to_csv(os.path.join(results_dir, actions_csv_name.replace('.csv', '_22.csv')))
+        results_df_22.to_csv(os.path.join(results_dir, results_table_name.replace('.csv', '_22.csv')))
+
         # logging
         if USE_WANDB:
             res_table = wandb.Table(dataframe=results_df) 
             run.log({f'Results Episode {i}': res_table})
+
+            res_table_22 = wandb.Table(dataframe=results_df_22)
+            run.log({f'Results 22 Episode {i}': res_table_22})
 
             

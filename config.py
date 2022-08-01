@@ -3,36 +3,40 @@ import os
 
 # ACTOR_LR = 0.1946789720401594
 # CRITIC_LR = 0.1946789720401594
-ACTOR_LR = 0.02
-CRITIC_LR = 0.02
-BATCH_SIZE = 512
-LAYER_1_SIZE = 400
-LAYER_2_SIZE = 400
+ACTOR_LR = 0.0031060995478059458
+CRITIC_LR = 0.0031060995478059458
+BATCH_SIZE = 8
+LAYER_1_SIZE = 512
+LAYER_2_SIZE = 512
 TAU = 0.001
-
+BUFFER_SIZE = 100000
 
 # n_actions and state_space dims depend on data and are being overwritten in training file
 N_ACTIONS = 2
 STATE_SPACE = 8
 
 TRAIN_FROM_SCRATCH = True
-SEED = 0
-# CHECKPOINT_DIR = 'trained_models/batch_512_lr_0.001_run_5_tuned_400_300/'
-# CHECKPOINT_DIR = 'trained_models/lr_schedule_step_10_grad_clip_small_nw_400_400_2016_2022_may/'
-CHECKPOINT_DIR = 'trained_models/training_from_2009_to_jun_2020/'
+# SEED = 12321
+# SEED = 329
+# SEED = 333
+SEED = 9923
+# SEED = 0
+# SEED = 42
+
+CHECKPOINT_DIR = f'trained_models/monthly_data_seed_{SEED}_run_2/'
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
 
 TRAIN_START_DATE = '2009-01-01'
-# TRAIN_END_DATE = '2016-01-01'
-TRAIN_END_DATE = '2020-06-30'
+TRAIN_END_DATE = '2016-01-01'
+# TRAIN_END_DATE = '2020-06-30'
 
 TEST_START_DATE = '2016-01-01'
-TEST_END_DATE = '2017-01-01'
+TEST_END_DATE = '2020-05-10'
 
 #  2020/07/01 to 2021/06/30
-TRADE_START_DATE = '2020-07-02'
-TRADE_END_DATE = '2021-06-30'
+TRADE_START_DATE = '2016-01-01'
+TRADE_END_DATE = '2022-07-31'
 
 ticker_name_from_config_tickers = 'DOW_30_TICKER'
 ORIGINAL_CSV_NAME = f'./data/data_raw_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRADE_END_DATE}.csv'
@@ -41,10 +45,13 @@ TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_D
 TEST_CSV_NAME =  f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{TRADE_START_DATE}_to_{TRADE_END_DATE}.csv'
 
+USE_MONTHLY_DATA = True
+DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when USE_DAILY_DATA == False
+
 BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
 
-TOTAL_EPISODES = 250
-SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 5
+TOTAL_EPISODES = 200
+SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 150
 SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES = 10
 
 USE_WANDB = True
