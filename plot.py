@@ -143,10 +143,10 @@ def trx_plot(df_trade, df_actions, ticker_list):
         plt.xticks(rotation=45, ha="right")
         plt.show()
 
-def get_comparison_df(df_account_value, baseline_ticker):
+def get_comparison_df(df_account_value, baseline_ticker, period="daily"):
     dates = str(df_account_value.loc[0,'date']) + '_to_' + str(df_account_value.loc[len(df_account_value)-1,'date'])
     agent_col = f'agent_{dates}'
-    agent_results = pd.DataFrame(backtest_stats(account_value=df_account_value), columns=[agent_col])
+    agent_results = pd.DataFrame(backtest_stats(account_value=df_account_value, period=period), columns=[agent_col])
     agent_results['metric'] = agent_results.index
     agent_results.reset_index(drop=True, inplace=True)
 
@@ -155,8 +155,10 @@ def get_comparison_df(df_account_value, baseline_ticker):
         start = df_account_value.loc[0,'date'],
         end = df_account_value.loc[len(df_account_value)-1,'date'])
 
+    baseline_indices = [i for i, date in enumerate(baseline_df_dji['date']) if date in list(df_account_value['date'])]
+    new_baseline_df = baseline_df_dji.loc[baseline_indices, :]
     dji_col = f'dji_{dates}'
-    dji_results = pd.DataFrame(backtest_stats(account_value=baseline_df_dji, value_col_name='close'), columns=[dji_col])
+    dji_results = pd.DataFrame(backtest_stats(account_value=new_baseline_df, value_col_name="close", period=period), columns=[dji_col])
     dji_results['metric'] = dji_results.index
     dji_results.reset_index(drop=True, inplace=True)
     results_df = agent_results.merge(dji_results, on='metric')

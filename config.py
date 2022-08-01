@@ -23,7 +23,7 @@ SEED = 9923
 # SEED = 0
 # SEED = 42
 
-CHECKPOINT_DIR = f'trained_models/monthly_data_seed_{SEED}_run_2/'
+CHECKPOINT_DIR = f'trained_models/monthly_data_seed_{SEED}_run_4_500_eps/'
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
 
@@ -45,12 +45,13 @@ TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_D
 TEST_CSV_NAME =  f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{TRADE_START_DATE}_to_{TRADE_END_DATE}.csv'
 
-USE_MONTHLY_DATA = True
+# USE_MONTHLY_DATA = True
+PERIOD = 'monthly'
 DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when USE_DAILY_DATA == False
 
 BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
 
-TOTAL_EPISODES = 200
+TOTAL_EPISODES = 500
 SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 150
 SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES = 10
 

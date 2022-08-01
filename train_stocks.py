@@ -52,7 +52,7 @@ else:
     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
 
-if USE_MONTHLY_DATA:
+if PERIOD == "monthly":
     train = sample_data_for_every_nth_day_of_the_month(df=train, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
     trade = sample_data_for_every_nth_day_of_the_month(df=trade, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
     test = sample_data_for_every_nth_day_of_the_month(df=test, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
@@ -116,7 +116,7 @@ w_config = dict(
   trade_csv = TRADE_CSV_NAME,
   seed = SEED,
   ticker_list_name = ticker_name_from_config_tickers,
-  use_monthly_data = USE_MONTHLY_DATA,
+  period = PERIOD,
   date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS
 )
 
@@ -214,19 +214,19 @@ for i in range(starting_episode, TOTAL_EPISODES):
         df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
         # print('results table....')
         # print(df_account_value.head())
-        results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING)
+        results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
         train_values = np.zeros(len(results_df))
         train_values[list(results_df.metric).index('Cumulative returns')] = cumulative_rewards_per_step_this_episode[-1]
         train_values[list(results_df.metric).index('Max drawdown')] = min(cumulative_rewards_per_step_this_episode)
         results_df['train_data'] = train_values
 
         df_account_value_22, df_actions_22, cumulative_rewards_test_22 = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
-        results_df_22 = get_comparison_df(df_account_value_22, BASELINE_TICKER_NAME_BACKTESTING)
+        results_df_22 = get_comparison_df(df_account_value_22, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
         
         results_df_22['train_data'] = train_values
 
         # saving
-        results_dir = f'./results/monthly_data_seed_{SEED}_run_2'
+        results_dir = f'./results/monthly_data_seed_{SEED}_run_4_500_eps'
         # results_dir = './results_lr_schedule_step_10_grad_clip_small_nw_400_400_2016_2022_may'
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
