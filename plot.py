@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pyfolio
 from pyfolio import timeseries
-
+import empyrical as ep
 # from finrl import config
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 
@@ -29,15 +29,40 @@ def convert_daily_return_to_pyfolio_ts(df):
     return pd.Series(strategy_ret["daily_return"].values, index=strategy_ret.index)
 
 
-def backtest_stats(account_value, value_col_name="account_value"):
+def backtest_stats(account_value, value_col_name="account_value", period="daily"):
     dr_test = get_daily_return(account_value, value_col_name=value_col_name)
-    perf_stats_all = timeseries.perf_stats(
-        returns=dr_test,
-        positions=None,
-        transactions=None,
-        turnover_denom="AGB",
-    )
-    print(perf_stats_all)
+    
+    if period == 'daily':
+        perf_stats_all = timeseries.perf_stats(
+            returns=dr_test,
+            positions=None,
+            transactions=None,
+            turnover_denom="AGB",
+        )
+        print(perf_stats_all)
+        
+    else:
+        returns = dr_test
+        STATS_DICT = {
+            'Annual return': ep.annual_return(returns, period=period),
+            'Cumulative returns': ep.cum_returns_final(returns, starting_value=0),
+            'Annual volatility': ep.annual_volatility(returns, period=period),
+            'Sharpe ratio': ep.sharpe_ratio(returns, risk_free=0, period=period),
+            'Calmar ratio': ep.calmar_ratio(returns, period=period),
+            'Stability': ep.stability_of_timeseries(returns),
+            'Max drawdown': ep.max_drawdown(returns),
+            'Omega ratio': ep.omega_ratio(returns, required_return=0.0),
+            'Sortino ratio': ep.sortino_ratio(returns, required_return=0, period=period),
+            'Skew': None,
+            'Kurtosis': None,
+            'Tail ratio': ep.tail_ratio(returns),
+            f'{period} value at risk': timeseries.value_at_risk(returns, period=period),
+
+        }
+
+        perf_stats_all = pd.Series(STATS_DICT)
+        print(perf_stats_all)
+        
     return perf_stats_all
 
 
