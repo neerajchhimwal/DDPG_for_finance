@@ -10,6 +10,7 @@ from config import DEVICE, sigma, theta, dt
 from config import CHECKPOINT_DIR, LR_SCHEDULE_STEP_SIZE
 import os
 import wandb
+import random
 
 class OUActionNoise(object):
     '''
@@ -262,6 +263,12 @@ class Agent(object):
         self.actor_loss_step = 0
         self.critic_loss_step = 0
         self.episode = 0
+        self.run = 0
+        # self.seed = seed
+        # np.random.seed(self.seed)
+        # # env.seed(SEED)
+        # T.manual_seed(self.seed)
+        # random.seed(self.seed)
 
     def choose_action(self, observation):
         self.actor.eval()
@@ -514,10 +521,19 @@ class Agent(object):
                     use_wandb=False,
                     wandb_config=None,
                     wandb_project_name=None,
-                    save_ckp=False):
+                    save_ckp=False,
+                    ):
 
         if use_wandb:
-            run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model')
+            self.run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model')
+
+        # if seed:
+        #     self.seed = seed
+            
+        # np.random.seed(self.seed)
+        # env.seed(self.seed)
+        # T.manual_seed(self.seed)
+        # random.seed(self.seed)
 
         starting_episode = 0
         if not train_from_scratch:
@@ -546,7 +562,7 @@ class Agent(object):
                 cumulative_reward = (env.asset_memory[-1] - env_kwargs['initial_amount']) / env_kwargs['initial_amount']
                 cumulative_rewards_per_step_this_episode.append(cumulative_reward)
                 if use_wandb:
-                    run.log({'Cumulative returns': cumulative_reward, 'days':day_counter_total})
+                    self.run.log({'Cumulative returns': cumulative_reward, 'days':day_counter_total})
                 day_counter_total += 1
                 
                 actor_loss_per_episode += self.actor_loss_step
@@ -566,11 +582,11 @@ class Agent(object):
 
             score_history.append(score)
             if use_wandb:
-                run.log({'steps per episode': step_count, 'episode': i})
-                run.log({'reward': score, 'episode': i})
+                self.run.log({'steps per episode': step_count, 'episode': i})
+                self.run.log({'reward': score, 'episode': i})
                 # run.log({'reward avg 100 games': np.mean(score_history[-100:]), 'episode': i})
-                run.log({'Actor loss': actor_loss_per_episode, 'episode': i})
-                run.log({'Critic loss': critic_loss_per_episode, 'episode': i})
+                self.run.log({'Actor loss': actor_loss_per_episode, 'episode': i})
+                self.run.log({'Critic loss': critic_loss_per_episode, 'episode': i})
 
                 # run.log({'Actor LR': ac_lr, 'episode': i})
                 # run.log({'Critic LR': cr_lr, 'episode': i})
