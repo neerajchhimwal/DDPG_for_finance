@@ -525,7 +525,7 @@ class Agent(object):
                     ):
 
         if use_wandb:
-            self.run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model')
+            self.run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model', reinit=True)
 
         # if seed:
         #     self.seed = seed

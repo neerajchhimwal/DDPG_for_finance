@@ -5,13 +5,24 @@ import os
 # CRITIC_LR = 0.1946789720401594
 
 ## monthly params
-# ACTOR_LR = 0.0031060995478059458
-# CRITIC_LR = 0.0031060995478059458
-# BATCH_SIZE = 8
-# LAYER_1_SIZE = 512
-# LAYER_2_SIZE = 512
+ACTOR_LR = 0.0011996013093168115
+CRITIC_LR = 0.0011996013093168115
+BATCH_SIZE = 8
+LAYER_1_SIZE = 512
+LAYER_2_SIZE = 512
+TAU = 0.001
+BUFFER_SIZE = 100000
+SEED = 76282
+
+# ACTOR_LR = 0.000044
+# CRITIC_LR = 0.000044
+# BATCH_SIZE = 32
+# LAYER_1_SIZE = 64
+# LAYER_2_SIZE = 64
 # TAU = 0.001
-# BUFFER_SIZE = 100000
+# BUFFER_SIZE = 1000
+# SEED = 76282
+
 # SEED = 9923
 # TRAIN_START_DATE = '2009-01-01'
 # TRAIN_END_DATE = '2016-01-01'
@@ -23,24 +34,35 @@ import os
 # TRADE_END_DATE = '2021-06-30'
 
 # daily params
-ACTOR_LR = 0.1946789720401594
-CRITIC_LR = 0.1946789720401594
-BATCH_SIZE = 128
-LAYER_1_SIZE = 64
-LAYER_2_SIZE = 64
-TAU = 0.001
-BUFFER_SIZE = 100000
-SEED = 12321
+# ACTOR_LR = 0.1946789720401594
+# CRITIC_LR = 0.1946789720401594
+# BATCH_SIZE = 128
+# LAYER_1_SIZE = 64
+# LAYER_2_SIZE = 64
+# TAU = 0.001
+# BUFFER_SIZE = 100000
+# SEED = 12321
 
 
 # n_actions and state_space dims depend on data and are being overwritten in training file
 N_ACTIONS = 2
 STATE_SPACE = 8
-HMAX = 100
+
+PERIOD = 'monthly'
+# PERIOD = 'daily'
+DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when USE_DAILY_DATA == False
+
+if PERIOD == 'monthly':
+    HMAX = 500
+else:
+    HMAX = 100
+
 INITIAL_AMOUNT = 1000000
 
 TRAIN_FROM_SCRATCH = True
-RETRAIN_IN_MONTHS = 3  # only applicable when retraining after every n months 
+RETRAIN_IN_MONTHS = 6  # only applicable when retraining after every n months 
+TEST_PERIOD_IN_MONTHS = 6 # only applicable when doing iterative hyperparam tuning while retraining
+
 # SEED = 12321
 # SEED = 329
 # SEED = 333
@@ -48,8 +70,10 @@ RETRAIN_IN_MONTHS = 3  # only applicable when retraining after every n months
 # SEED = 0
 # SEED = 42
 
-CHECKPOINT_DIR = f'./trained_models/trade_with_retrain_window_of_3_months_daily_data'
-RESULTS_DIR = f'./results/trade_with_retrain_window_of_3_months_daily_data'
+# CHECKPOINT_DIR = f'./trained_models/monthly_seed_{SEED}_trade_until_2022_Jan_ep_250'
+# RESULTS_DIR = f'./results/monthly_seed_{SEED}_trade_until_2022_Jan_ep_250'
+CHECKPOINT_DIR = f'./trained_models/train_test_trade_pipeline_seed_{SEED}_retrain_{RETRAIN_IN_MONTHS}_test_{TEST_PERIOD_IN_MONTHS}'
+RESULTS_DIR = f'./results/train_test_trade_pipeline_seed_{SEED}_retrain_{RETRAIN_IN_MONTHS}_test_{TEST_PERIOD_IN_MONTHS}'
 
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
@@ -57,6 +81,14 @@ if not os.path.exists(CHECKPOINT_DIR):
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
 
+# TRAIN_START_DATE = '2009-01-01'
+# TRAIN_END_DATE = '2016-01-01'
+
+# TEST_START_DATE = '2016-01-01'
+# TEST_END_DATE = '2020-05-10'
+
+# TRADE_START_DATE = '2016-01-01'
+# TRADE_END_DATE = '2020-05-10'
 TRAIN_START_DATE = '2009-01-01'
 TRAIN_END_DATE = '2016-01-01'
 
@@ -64,7 +96,8 @@ TEST_START_DATE = '2016-01-01'
 TEST_END_DATE = '2020-05-10'
 
 TRADE_START_DATE = '2016-01-01'
-TRADE_END_DATE = '2020-05-10'
+# TRADE_END_DATE = '2022-07-31'
+TRADE_END_DATE = '2022-01-04'
 
 ticker_name_from_config_tickers = 'DOW_30_TICKER'
 ORIGINAL_CSV_NAME = f'./data/data_raw_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRADE_END_DATE}.csv'
@@ -73,18 +106,15 @@ TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_D
 TEST_CSV_NAME =  f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 TRADE_CSV_NAME = f'./data/trade_{ticker_name_from_config_tickers}_{TRADE_START_DATE}_to_{TRADE_END_DATE}.csv'
 
-# USE_MONTHLY_DATA = True
-# PERIOD = 'monthly'
-PERIOD = 'daily'
-DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when USE_DAILY_DATA == False
 
 BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
 
-TOTAL_EPISODES = 20
-SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 10
+TOTAL_EPISODES = 100
+SAVE_CKP_AFTER_EVERY_NUM_EPISODES = 100
 SAVE_REWARD_TABLE_AFTER_EVERY_NUM_EPISODES = 10
 
 USE_WANDB = True
+PROJECT_NAME = 'stk_train_test_trade_pipeline_2'
 # RESUME_LAST_WANDB_RUN = True
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'

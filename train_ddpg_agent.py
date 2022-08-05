@@ -19,37 +19,52 @@ import random
 import torch
 import matplotlib.pyplot as plt
 import empyrical as ep
+from utils import sample_data_for_every_nth_day_of_the_month
 
 # DATA
 # df = download(TRAIN_START_DATE, TRADE_END_DATE, ticker_list=config_tickers.DOW_30_TICKER)
-if not (os.path.exists(TRAIN_CSV_NAME) and os.path.exists(TEST_CSV_NAME) and os.path.exists(TRADE_CSV_NAME)):
-    df = YahooDownloader(start_date = TRAIN_START_DATE,
-                        end_date = TRADE_END_DATE,
-                        ticker_list = config_tickers.DOW_30_TICKER).fetch_data()
-    print(f'Data Downloaded! shape:{df.shape}')
+# if not (os.path.exists(TRAIN_CSV_NAME) and os.path.exists(TEST_CSV_NAME) and os.path.exists(TRADE_CSV_NAME)):
+#     df = YahooDownloader(start_date = TRAIN_START_DATE,
+#                         end_date = TRADE_END_DATE,
+#                         ticker_list = config_tickers.DOW_30_TICKER).fetch_data()
+#     print(f'Data Downloaded! shape:{df.shape}')
 
-    df_processed = process_data(df, use_technical_indicator=True, technical_indicator_list=INDICATORS, 
-                                use_vix=True, use_turbulence=True, user_defined_feature=False)
+#     df_processed = process_data(df, use_technical_indicator=True, technical_indicator_list=INDICATORS, 
+#                                 use_vix=True, use_turbulence=True, user_defined_feature=False)
 
-    print(f'Data Processed! shape:{df_processed.shape}')
+#     print(f'Data Processed! shape:{df_processed.shape}')
 
-    train = data_split(df_processed, TRAIN_START_DATE, TRAIN_END_DATE)
-    test = data_split(df_processed, TEST_START_DATE, TEST_END_DATE)
-    trade = data_split(df_processed, TRADE_START_DATE, TRADE_END_DATE)
+#     train = data_split(df_processed, TRAIN_START_DATE, TRAIN_END_DATE)
+#     test = data_split(df_processed, TEST_START_DATE, TEST_END_DATE)
+#     trade = data_split(df_processed, TRADE_START_DATE, TRADE_END_DATE)
 
-    print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
-    print('Saving csvs...')
-    df.to_csv(ORIGINAL_CSV_NAME)
-    df_processed.to_csv(PROCESSED_CSV_NAME)
-    train.to_csv(TRAIN_CSV_NAME)
-    test.to_csv(TEST_CSV_NAME)
-    trade.to_csv(TRADE_CSV_NAME)
-else:
-    print('reading csvs...')
-    train = pd.read_csv(TRAIN_CSV_NAME, index_col='Unnamed: 0')
-    trade = pd.read_csv(TRADE_CSV_NAME, index_col='Unnamed: 0')
-    test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
-    print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
+#     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
+#     print('Saving csvs...')
+#     df.to_csv(ORIGINAL_CSV_NAME)
+#     df_processed.to_csv(PROCESSED_CSV_NAME)
+#     train.to_csv(TRAIN_CSV_NAME)
+#     test.to_csv(TEST_CSV_NAME)
+#     trade.to_csv(TRADE_CSV_NAME)
+# else:
+#     print('reading csvs...')
+#     train = pd.read_csv(TRAIN_CSV_NAME, index_col='Unnamed: 0')
+#     trade = pd.read_csv(TRADE_CSV_NAME, index_col='Unnamed: 0')
+#     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
+#     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
+
+processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+print(f'Reading processed csv {processed_csv}')
+df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
+
+train = data_split(df_processed, TRAIN_START_DATE, TRAIN_END_DATE)
+test = data_split(df_processed, TEST_START_DATE, TEST_END_DATE)
+trade = data_split(df_processed, TRADE_START_DATE, TRADE_END_DATE)
+
+print('='*100)
+print('Train from', train['date'].iloc[0], ' to ', train['date'].iloc[-1])
+print('Test from', test['date'].iloc[0], ' to ', test['date'].iloc[-1])
+print('Trade from', trade['date'].iloc[0], ' to ', trade['date'].iloc[-1])
+print('='*100)
 
 if PERIOD == "monthly":
     train = sample_data_for_every_nth_day_of_the_month(df=train, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
@@ -57,6 +72,12 @@ if PERIOD == "monthly":
     test = sample_data_for_every_nth_day_of_the_month(df=test, date=DATE_OF_THE_MONTH_TO_TAKE_ACTIONS)
     print('Shapes after converting from daily to monthly')
     print(f'Train shape: {train.shape} Trade shape: {trade.shape} Test shape {test.shape}')
+
+print('='*100)
+print('Train from', train['date'].iloc[0], ' to ', train['date'].iloc[-1])
+print('Test from', test['date'].iloc[0], ' to ', test['date'].iloc[-1])
+print('Trade from', trade['date'].iloc[0], ' to ', trade['date'].iloc[-1])
+print('='*100)
 
 # env
 stock_dimension = len(train.tic.unique())
@@ -66,7 +87,7 @@ buy_cost_list = sell_cost_list = [0.001] * stock_dimension
 num_stock_shares = [0] * stock_dimension
 
 env_kwargs = {
-    "hmax": 100,
+    "hmax": HMAX,
     "initial_amount": 1000000,
     "num_stock_shares": num_stock_shares,
     "buy_cost_pct": buy_cost_list,
@@ -138,25 +159,23 @@ agent = agent.train_model(
 print('agent training complete')
 
 df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
-# print('results table....')
-# print(df_account_value.head())
 results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
-# train_values = np.zeros(len(results_df))
-# train_values[list(results_df.metric).index('Cumulative returns')] = cumulative_rewards_per_step_this_episode[-1]
-# train_values[list(results_df.metric).index('Max drawdown')] = min(cumulative_rewards_per_step_this_episode)
-# results_df['train_data'] = train_values
+
+df_account_value_22, df_actions_22, cumulative_rewards_test = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
+results_df_22 = get_comparison_df(df_account_value_22, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
 
 # saving
-results_dir = f'./results/test_seed_fixing_train_agent_with_seed_{SEED}_daily'
-# results_dir = './results_lr_schedule_step_10_grad_clip_small_nw_400_400_2016_2022_may'
-if not os.path.exists(results_dir):
-    os.makedirs(results_dir)
+
 account_value_csv_name = f'account_value_test_episode_{agent.episode}.csv'
 actions_csv_name = f'daily_actions_test_episode_{agent.episode}.csv'
 results_table_name = f'return_comparison_episode_{agent.episode}.csv'
-df_account_value.to_csv(os.path.join(results_dir, account_value_csv_name))
-df_actions.to_csv(os.path.join(results_dir, actions_csv_name))
-results_df.to_csv(os.path.join(results_dir, results_table_name))
+df_account_value.to_csv(os.path.join(RESULTS_DIR, account_value_csv_name))
+df_actions.to_csv(os.path.join(RESULTS_DIR, actions_csv_name))
+results_df.to_csv(os.path.join(RESULTS_DIR, results_table_name))
+
+df_account_value_22.to_csv(os.path.join(RESULTS_DIR, account_value_csv_name.replace('.csv', '_22.csv')))
+df_actions_22.to_csv(os.path.join(RESULTS_DIR, actions_csv_name.replace('.csv', '_22.csv')))
+results_df_22.to_csv(os.path.join(RESULTS_DIR, results_table_name.replace('.csv', '_22.csv')))
 
 # plotting DJI vs agent cumulative returns
 test_returns_t, baseline_returns_t = backtest_plot(df_account_value, 
@@ -164,22 +183,40 @@ test_returns_t, baseline_returns_t = backtest_plot(df_account_value,
                                                  baseline_start = df_account_value.iloc[0]['date'],
                                                  baseline_end = df_account_value.iloc[-1]['date'])
 
+test_returns_22, baseline_returns_22 = backtest_plot(df_account_value_22, 
+                                                 baseline_ticker = BASELINE_TICKER_NAME_BACKTESTING, 
+                                                 baseline_start = df_account_value_22.iloc[0]['date'],
+                                                 baseline_end = df_account_value_22.iloc[-1]['date'])
+
 
 cum_rets_t = ep.cum_returns(test_returns_t, 0.0)
 cum_rets_dji_t = ep.cum_returns(baseline_returns_t, 0.0)
 
+cum_rets_22 = ep.cum_returns(test_returns_22, 0.0)
+cum_rets_dji_22 = ep.cum_returns(baseline_returns_22, 0.0)
+
 plt.figure(figsize=(16,6))
+plt.subplot(211)
 plt.plot(cum_rets_t)
 plt.plot(cum_rets_dji_t)
 plt.legend(['agent', 'dji'])
 plt.xlabel('Date')
 plt.ylabel('Cumulative returns')
 
+plt.subplot(212)
+plt.plot(cum_rets_22)
+plt.plot(cum_rets_dji_22)
+plt.legend(['agent', 'dji'])
+plt.xlabel('Date')
+plt.ylabel('Cumulative returns 22')
+
 # logging
 if USE_WANDB:
     res_table = wandb.Table(dataframe=results_df) 
-    agent.run.log({f'Results Episode {agent.episode}': res_table})
+    res_table_22 = wandb.Table(dataframe=results_df_22)
 
+    agent.run.log({f'Results Episode {agent.episode}': res_table})
+    agent.run.log({f'Results Episode 22 {agent.episode}': res_table_22})
     agent.run.log({"Cumulative returns comparison": plt})
 
 
