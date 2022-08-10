@@ -42,7 +42,7 @@ import torch
 
 # from config_tuning import *
 import config_tuning
-from config import SEED, PERIOD, INDICATORS, DATE_OF_THE_MONTH_TO_TAKE_ACTIONS, BASELINE_TICKER_NAME_BACKTESTING
+from config import SEED, PERIOD, HMAX, INDICATORS, DATE_OF_THE_MONTH_TO_TAKE_ACTIONS, BASELINE_TICKER_NAME_BACKTESTING
 # from hyp_utils import *
 
 ## Fixed
@@ -354,7 +354,7 @@ class LoggingCallback:
 
 def sample_ddpg_params(trial:optuna.Trial):
     # Size of the replay buffer
-    buffer_size = trial.suggest_categorical("buffer_size", [int(1e4), int(1e5), int(1e6)])
+    # buffer_size = trial.suggest_categorical("buffer_size", [int(1e4), int(1e5), int(1e6)])
     # tau = trial.suggest_categorical("tau", [0.01, 0.001, 0.005])
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1e-1)
 #     learning_rate_critic = trial.suggest_loguniform("learning_rate_critic", 1e-5, 1e-1)
@@ -376,8 +376,8 @@ def sample_ddpg_params(trial:optuna.Trial):
 
     return {
             # "tau": tau,
+            # "buffer_size": buffer_size,
             "learning_rate": learning_rate,
-            "buffer_size": buffer_size,
             "batch_size": batch_size,
             "layer_1_size": net_arch[0],
             "layer_2_size": net_arch[1]
@@ -394,10 +394,11 @@ def objective(trial:optuna.Trial, e_train_gym, env_kwargs, train_df, test_df):
     CRITIC_LR = hyperparameters["learning_rate"]
     BATCH_SIZE = hyperparameters["batch_size"]
     TAU = 0.001
+    buffer_size = 10000
     # TAU = hyperparameters["tau"]
     LAYER_1_SIZE = hyperparameters["layer_1_size"]
     LAYER_2_SIZE = hyperparameters["layer_2_size"]
-    buffer_size = hyperparameters["buffer_size"]
+    # buffer_size = hyperparameters["buffer_size"]
     
     model_ddpg = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=config_tuning.TUNING_TRIAL_MODELS_DIR, input_dims=env_kwargs['state_space'], tau=TAU,
               batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=buffer_size,
@@ -430,6 +431,7 @@ def get_tuned_hyperparams(train_df, test_df, env_kwargs, study_name='ddpg_study'
     env_train, _ = e_train_gym.get_sb_env()
 
     # seed fixing for reproducability
+    print(f'SEED: {SEED}')
     np.random.seed(SEED)
     e_train_gym.seed(SEED)
     torch.manual_seed(SEED)
@@ -469,27 +471,38 @@ if __name__ == "__main__":
     TEST_START_DATE = '2015-01-01'
     TEST_END_DATE = '2016-01-01'
     ticker_name_from_config_tickers = 'DOW_30_TICKER'
-    TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRAIN_END_DATE}.csv'
-    TEST_CSV_NAME = f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
+    # TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRAIN_END_DATE}.csv'
+    # TEST_CSV_NAME = f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 
-    print('reading csvs...')
-    train = pd.read_csv(TRAIN_CSV_NAME, index_col='Unnamed: 0')
-    test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
-    print(f'Train shape: {train.shape} \nTest shape: {test.shape}')
+    # print('reading csvs...')
+    # train = pd.read_csv(TRAIN_CSV_NAME, index_col='Unnamed: 0')
+    # test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
+    # print(f'Train shape: {train.shape} \nTest shape: {test.shape}')
+    processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+    print(f'Reading processed csv {processed_csv}')
+    df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 
+    train = data_split(df_processed, TRAIN_START_DATE, TRAIN_END_DATE)
+    test = data_split(df_processed, TEST_START_DATE, TEST_END_DATE)
+    
     # monthly
-    print('After converting to monthly...')
-    train = sample_data_for_every_nth_day_of_the_month(df=train, date='02')
-    test = sample_data_for_every_nth_day_of_the_month(df=test, date='02')
-    print(f'Train shape: {train.shape} \nTest shape: {test.shape}')
+    if PERIOD == 'monthly':
+        print('After converting to monthly...')
+        train = sample_data_for_every_nth_day_of_the_month(df=train, date='02')
+        test = sample_data_for_every_nth_day_of_the_month(df=test, date='02')
+        print(f'Train shape: {train.shape} \nTest shape: {test.shape}')
 
+    print('Train start date:', train['date'].iloc[0], ' Train end date:', train['date'].iloc[-1])
+    print('Test start date:', test['date'].iloc[0], ' Test end date:', test['date'].iloc[-1])
+
+    print(f'Train shape: {train.shape}, Test shape: {test.shape}')
     stock_dimension = len(train.tic.unique())
     state_space = 1 + 2*stock_dimension + len(INDICATORS) * stock_dimension
     print(f"Stock Dimension: {stock_dimension}, State Space: {state_space}")
     buy_cost_list = sell_cost_list = [0.001] * stock_dimension
     num_stock_shares = [0] * stock_dimension
     env_kwargs = {
-        "hmax": 100,
+        "hmax": HMAX,
         "initial_amount": 1000000,
         "num_stock_shares": num_stock_shares,
         "buy_cost_pct": buy_cost_list,
@@ -501,5 +514,5 @@ if __name__ == "__main__":
         "reward_scaling": 1e-4
     }
 
-    tuned_hyperparams = get_tuned_hyperparams(train_df=train, test_df=test, env_kwargs=env_kwargs)
+    tuned_hyperparams = get_tuned_hyperparams(train_df=train, test_df=test, env_kwargs=env_kwargs, study_name='daily_ddpg')
     print('Tuned hyperparams: ', tuned_hyperparams)

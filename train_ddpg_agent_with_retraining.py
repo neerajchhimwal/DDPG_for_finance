@@ -26,6 +26,7 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 random.seed(SEED)
 
+import config
 
 net_arch = {
         "small": [64, 64],
@@ -101,10 +102,10 @@ def run_trade_and_train(retrain_in_months, df, train_period, trade_period,
             
         trade = data_split(df, start=unique_trade_date[i - retrain_window], end=unique_trade_date[i])
         
-#         print('='*100)
-#         print('Train start date:', train['date'].iloc[0], ' Train end date:', train['date'].iloc[-1])
-#         print('Test start date:', test['date'].iloc[0], ' Test end date:', test['date'].iloc[-1])
-#         print('Trade start date:', trade['date'].iloc[0], ' Trade end date:', trade['date'].iloc[-1])
+        print('='*100)
+        print('Train start date:', train['date'].iloc[0], ' Train end date:', train['date'].iloc[-1])
+        print('Test start date:', test['date'].iloc[0], ' Test end date:', test['date'].iloc[-1])
+        print('Trade start date:', trade['date'].iloc[0], ' Trade end date:', trade['date'].iloc[-1])
         
         # hyperparameter tuning on test set
         if do_hyp_tuning:
@@ -115,7 +116,15 @@ def run_trade_and_train(retrain_in_months, df, train_period, trade_period,
             net_size = net_arch[hyperparameters['net_arch']]
             LAYER_1_SIZE = net_size[0]
             LAYER_2_SIZE = net_size[1]
-            BUFFER_SIZE = hyperparameters['buffer_size']
+            # BUFFER_SIZE = hyperparameters['buffer_size']
+
+        else:
+            ACTOR_LR = config.ACTOR_LR
+            CRITIC_LR = config.CRITIC_LR
+            BATCH_SIZE = config.BATCH_SIZE
+            LAYER_1_SIZE = config.LAYER_1_SIZE
+            LAYER_2_SIZE = config.LAYER_2_SIZE
+            # BUFFER_SIZE = hyperparameters['buffer_size']
 
         train_env = StockTradingEnv(df=train, **env_kwargs)
         train_env.seed(SEED)
@@ -164,7 +173,9 @@ def run_trade_and_train(retrain_in_months, df, train_period, trade_period,
                 seed = SEED,
                 ticker_list_name = ticker_name_from_config_tickers,
                 period = PERIOD,
-                date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS
+                date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS,
+                retrain_in_months = RETRAIN_IN_MONTHS,
+                test_in_months = TEST_PERIOD_IN_MONTHS
                 )
                     
         agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=CHECKPOINT_DIR, input_dims=state_space, tau=TAU,
