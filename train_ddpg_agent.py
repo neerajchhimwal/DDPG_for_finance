@@ -52,7 +52,7 @@ from utils import sample_data_for_every_nth_day_of_the_month
 #     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
 #     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
 
-processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+processed_csv = './data/nifty/data_processed_nifty_tics_2009_2022_Aug.csv'
 print(f'Reading processed csv {processed_csv}')
 df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 
@@ -104,7 +104,7 @@ env_kwargs = {
 env = StockTradingEnv(df = train, **env_kwargs)
 env_train, _ = env.get_sb_env()
 
-ENV_NAME = 'stock_tr_scaled_actions'
+# ENV_NAME = 'stock_tr_scaled_actions'
 w_config = dict(
   alpha = ACTOR_LR,
   beta = CRITIC_LR,
@@ -116,7 +116,6 @@ w_config = dict(
   n_actions = stock_dimension,
   tau = TAU,
   architecture = "DDPG",
-  env = ENV_NAME,
   train_start_date = TRAIN_START_DATE,
   train_end_date = TRAIN_END_DATE,
   trade_start_date = TRADE_START_DATE,
@@ -131,8 +130,8 @@ w_config = dict(
   tech_indicator_list = env_kwargs['tech_indicator_list'],
   action_space = env_kwargs['action_space'],
   reward_scaling = env_kwargs['reward_scaling'],
-  train_csv = TRAIN_CSV_NAME,
-  trade_csv = TRADE_CSV_NAME,
+  checkpoint_dir = CHECKPOINT_DIR,
+  results_dir = RESULTS_DIR,
   seed = SEED,
   ticker_list_name = ticker_name_from_config_tickers,
   period = PERIOD,
