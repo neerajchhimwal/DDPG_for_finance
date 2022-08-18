@@ -276,8 +276,8 @@ if __name__ == "__main__":
     #     print(f'\nreading csv {PROCESSED_CSV_NAME}...')
     #     df = pd.read_csv(PROCESSED_CSV_NAME, index_col='Unnamed: 0')
     #     print(f'DF shape: {df.shape}')
-    # processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
-    processed_csv = './data/nifty/data_processed_nifty_tics_2009_2022_Aug.csv'
+    processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+    
     print(f'Reading processed csv {processed_csv}')
     df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 

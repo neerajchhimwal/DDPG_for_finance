@@ -52,7 +52,7 @@ from utils import sample_data_for_every_nth_day_of_the_month
 #     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
 #     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
 
-processed_csv = './data/nifty/data_processed_nifty_tics_2009_2022_Aug.csv'
+processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv' 
 print(f'Reading processed csv {processed_csv}')
 df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 
