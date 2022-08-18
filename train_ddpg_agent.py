@@ -90,7 +90,7 @@ num_stock_shares = [0] * stock_dimension
 
 env_kwargs = {
     "hmax": HMAX,
-    "initial_amount": 1000000,
+    "initial_amount": INITIAL_AMOUNT,
     "num_stock_shares": num_stock_shares,
     "buy_cost_pct": buy_cost_list,
     "sell_cost_pct": sell_cost_list,
@@ -100,7 +100,7 @@ env_kwargs = {
     "action_space": stock_dimension,
     "reward_scaling": 1e-4
 }
-
+print('env_kwargs', env_kwargs)
 env = StockTradingEnv(df = train, **env_kwargs)
 env_train, _ = env.get_sb_env()
 
@@ -133,14 +133,14 @@ w_config = dict(
   checkpoint_dir = CHECKPOINT_DIR,
   results_dir = RESULTS_DIR,
   seed = SEED,
-  ticker_list_name = ticker_name_from_config_tickers,
+  ticker_list_name = BASELINE_TICKER_NAME_BACKTESTING,
   period = PERIOD,
   date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS
 )
 
 # PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
 # PROJECT_NAME = "ddpg_tuned_dji_linux"
-
+print('SEED: ', SEED)
 np.random.seed(SEED)
 env.seed(SEED)
 torch.manual_seed(SEED)
@@ -215,7 +215,7 @@ plt.figure(figsize=(16,6))
 plt.subplot(211)
 plt.plot(cum_rets_t)
 plt.plot(cum_rets_dji_t)
-plt.legend(['agent', 'dji'])
+plt.legend(['agent', 'index'])
 plt.xlabel('Date')
 plt.ylabel('Cumulative returns')
 # plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns 1.png'), dpi=600)
@@ -223,7 +223,7 @@ plt.ylabel('Cumulative returns')
 plt.subplot(212)
 plt.plot(cum_rets_22)
 plt.plot(cum_rets_dji_22)
-plt.legend(['agent', 'dji'])
+plt.legend(['agent', 'index'])
 plt.xlabel('Date')
 plt.ylabel('Cumulative returns 22')
 
@@ -266,6 +266,7 @@ plt.xlabel('Date')
 plt.ylabel('Cumulative returns')
 plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns July 22.png'), dpi=600)
 
+# copy config to trained models and results dir
 
 
 

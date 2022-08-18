@@ -46,6 +46,7 @@ def download_indian_stocks(ticker_list, start_date, end_date):
     final_df = final_df.rename_axis('date').reset_index()
     final_df = final_df.sort_values(['date', 'tic'])
     final_df.drop_duplicates(inplace=True)
+    final_df['date'] = [str(i) for i in final_df['date']]
     final_df.reset_index(drop=True, inplace=True)
 
     return final_df
