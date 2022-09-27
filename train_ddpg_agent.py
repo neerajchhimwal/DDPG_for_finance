@@ -1,13 +1,13 @@
 from ddpg_torch import Agent
-import gym
+# from ddpg_torch_3_lay import Agent
 import numpy as np
 import pandas as pd
-from utils import plotLearning
 import wandb
 from config import *
 import config_tickers
 from download_data import process_data
 from stock_trading_env import StockTradingEnv
+# from env_stocktrading_cashpenalty import StockTradingEnvCashpenalty
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 from finrl.meta.preprocessor.preprocessors import data_split
 from trade_stocks import trade_on_test_df
@@ -52,10 +52,22 @@ from utils import sample_data_for_every_nth_day_of_the_month
 #     test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
 #     print(f'Train shape: {train.shape} Test shape: {test.shape} Trade shape: {trade.shape}')
 
-processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv' 
+
+if BASELINE_TICKER_NAME_BACKTESTING == '^DJI':
+    processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+else:
+    processed_csv = './data/sensex/sensex_tics_processed.csv'
 print(f'Reading processed csv {processed_csv}')
 df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 
+# raw_csv = './data/sensex/sensex_tics_raw.csv'
+# print(f'Reading raw csv {raw_csv}')
+# df = pd.read_csv(raw_csv, index_col='Unnamed: 0')
+
+# df_processed = process_data(df, use_technical_indicator=True, technical_indicator_list=INDICATORS, 
+#                                 use_vix=True, use_turbulence=True, user_defined_feature=False)
+
+# df_processed.to_csv('./data/sensex/sensex_tics_processed_more_ind.csv')
 train = data_split(df_processed, TRAIN_START_DATE, TRAIN_END_DATE)
 test = data_split(df_processed, TEST_START_DATE, TEST_END_DATE)
 trade = data_split(df_processed, TRADE_START_DATE, TRADE_END_DATE)
@@ -102,6 +114,7 @@ env_kwargs = {
 }
 print('env_kwargs', env_kwargs)
 env = StockTradingEnv(df = train, **env_kwargs)
+# env = StockTradingEnvCashpenalty(df=train, **env_kwargs)
 env_train, _ = env.get_sb_env()
 
 # ENV_NAME = 'stock_tr_scaled_actions'
@@ -135,7 +148,17 @@ w_config = dict(
   seed = SEED,
   ticker_list_name = BASELINE_TICKER_NAME_BACKTESTING,
   period = PERIOD,
-  date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS
+  date_per_month_for_actions = DATE_OF_THE_MONTH_TO_TAKE_ACTIONS,
+  EXPLORATION_NOISE = EXPLORATION_NOISE,
+  UNIFORM_INITIAL_EXPLORATION = UNIFORM_INITIAL_EXPLORATION,
+  EXPLORATION_STEP_COUNT = EXPLORATION_STEP_COUNT,
+  NOISE_ANNEALING = NOISE_ANNEALING,
+  sigma = sigma, 
+  theta = theta,
+  dt = dt,
+  NORMAL_SCALAR = NORMAL_SCALAR,
+  LR_SCHEDULE_STEP_SIZE = LR_SCHEDULE_STEP_SIZE_ACTOR,
+  LR_SCHEDULE_STEP_SIZE_CRITIC = LR_SCHEDULE_STEP_SIZE_CRITIC
 )
 
 # PROJECT_NAME = f"pytorch_tuned_sb_ddpg_{ENV_NAME.lower()}"
@@ -148,9 +171,17 @@ random.seed(SEED)
 # print('Asset: ', env.asset_memory)
 # log
 
+noise_params = { # coming from config.py
+    'sigma': sigma, 
+    'theta': theta, 
+    'dt': dt,
+}
+
+TOTAL_STEPS_GLOBAL = TOTAL_EPISODES*train.date.nunique()
+
 agent = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=CHECKPOINT_DIR, input_dims=state_space, tau=TAU,
               batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=BUFFER_SIZE,
-              n_actions=stock_dimension)
+              n_actions=stock_dimension, total_steps_global=TOTAL_STEPS_GLOBAL, **noise_params)
 
 agent = agent.train_model(
                         total_episodes=TOTAL_EPISODES, train_from_scratch=TRAIN_FROM_SCRATCH, 
@@ -159,8 +190,8 @@ agent = agent.train_model(
 
 print('agent training complete')
 
-df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
-results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
+# df_account_value, df_actions, cumulative_rewards_test = trade_on_test_df(df=trade, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
+# results_df = get_comparison_df(df_account_value, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
 
 df_account_value_22, df_actions_22, cumulative_rewards_test = trade_on_test_df(df=test, model=agent, train_df=train, env_kwargs=env_kwargs, seed=SEED)
 results_df_22 = get_comparison_df(df_account_value_22, BASELINE_TICKER_NAME_BACKTESTING, period=PERIOD)
@@ -173,9 +204,9 @@ results_df_2 = get_comparison_df(df_account_value_2, BASELINE_TICKER_NAME_BACKTE
 account_value_csv_name = f'account_value_test_episode_{agent.episode}.csv'
 actions_csv_name = f'daily_actions_test_episode_{agent.episode}.csv'
 results_table_name = f'return_comparison_episode_{agent.episode}.csv'
-df_account_value.to_csv(os.path.join(RESULTS_DIR, account_value_csv_name))
-df_actions.to_csv(os.path.join(RESULTS_DIR, actions_csv_name))
-results_df.to_csv(os.path.join(RESULTS_DIR, results_table_name))
+# df_account_value.to_csv(os.path.join(RESULTS_DIR, account_value_csv_name))
+# df_actions.to_csv(os.path.join(RESULTS_DIR, actions_csv_name))
+# results_df.to_csv(os.path.join(RESULTS_DIR, results_table_name))
 
 df_account_value_22.to_csv(os.path.join(RESULTS_DIR, account_value_csv_name.replace('.csv', '_22.csv')))
 df_actions_22.to_csv(os.path.join(RESULTS_DIR, actions_csv_name.replace('.csv', '_22.csv')))
@@ -186,10 +217,10 @@ df_actions_2.to_csv(os.path.join(RESULTS_DIR, actions_csv_name.replace('.csv', '
 results_df_2.to_csv(os.path.join(RESULTS_DIR, results_table_name.replace('.csv', '_2.csv')))
 
 # plotting DJI vs agent cumulative returns
-test_returns_t, baseline_returns_t = backtest_plot(df_account_value, 
-                                                 baseline_ticker = BASELINE_TICKER_NAME_BACKTESTING, 
-                                                 baseline_start = df_account_value.iloc[0]['date'],
-                                                 baseline_end = df_account_value.iloc[-1]['date'])
+# test_returns_t, baseline_returns_t = backtest_plot(df_account_value, 
+#                                                  baseline_ticker = BASELINE_TICKER_NAME_BACKTESTING, 
+#                                                  baseline_start = df_account_value.iloc[0]['date'],
+#                                                  baseline_end = df_account_value.iloc[-1]['date'])
 
 test_returns_22, baseline_returns_22 = backtest_plot(df_account_value_22, 
                                                  baseline_ticker = BASELINE_TICKER_NAME_BACKTESTING, 
@@ -202,8 +233,8 @@ test_returns_2, baseline_returns_2 = backtest_plot(df_account_value_2,
                                                  baseline_end = df_account_value_2.iloc[-1]['date'])
 
 
-cum_rets_t = ep.cum_returns(test_returns_t, 0.0)
-cum_rets_dji_t = ep.cum_returns(baseline_returns_t, 0.0)
+# cum_rets_t = ep.cum_returns(test_returns_t, 0.0)
+# cum_rets_dji_t = ep.cum_returns(baseline_returns_t, 0.0)
 
 cum_rets_22 = ep.cum_returns(test_returns_22, 0.0)
 cum_rets_dji_22 = ep.cum_returns(baseline_returns_22, 0.0)
@@ -213,12 +244,12 @@ cum_rets_dji_2 = ep.cum_returns(baseline_returns_2, 0.0)
 
 plt.figure(figsize=(16,6))
 plt.subplot(211)
-plt.plot(cum_rets_t)
-plt.plot(cum_rets_dji_t)
+plt.plot(cum_rets_2)
+plt.plot(cum_rets_dji_2)
 plt.legend(['agent', 'index'])
 plt.xlabel('Date')
 plt.ylabel('Cumulative returns')
-# plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns 1.png'), dpi=600)
+plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns 1.png'), dpi=600)
 
 plt.subplot(212)
 plt.plot(cum_rets_22)
@@ -230,23 +261,23 @@ plt.ylabel('Cumulative returns 22')
 
 # logging
 if USE_WANDB:
-    res_table = wandb.Table(dataframe=results_df) 
+    # res_table = wandb.Table(dataframe=results_df) 
     res_table_22 = wandb.Table(dataframe=results_df_22)
     res_table_2 = wandb.Table(dataframe=results_df_2)
 
-    agent.run.log({f'Results {agent.episode}': res_table})
+    # agent.run.log({f'Results {agent.episode}': res_table})
     agent.run.log({f'Results 22 {agent.episode}': res_table_22})
     agent.run.log({f'Results 2 {agent.episode}': res_table_2})
     agent.run.log({"Cumulative returns comparison": plt})
 
 plt.clf()
 plt.figure(figsize=(16,6))
-plt.plot(cum_rets_t)
-plt.plot(cum_rets_dji_t)
-plt.legend(['agent', 'dji'])
-plt.xlabel('Date')
-plt.ylabel('Cumulative returns')
-plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns Jan 22.png'), dpi=600)
+# plt.plot(cum_rets_t)
+# plt.plot(cum_rets_dji_t)
+# plt.legend(['agent', 'dji'])
+# plt.xlabel('Date')
+# plt.ylabel('Cumulative returns')
+# plt.savefig(os.path.join(RESULTS_DIR, 'Cumulative returns Jan 22.png'), dpi=600)
 
 plt.clf()
 plt.figure(figsize=(16,6))

@@ -10,6 +10,10 @@ import empyrical as ep
 # from finrl import config
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 
+from nsepy import get_history
+from download_data import get_date_from_str
+from finrl.meta.preprocessor.preprocessors import data_split
+import yfinance as yf
 
 def get_daily_return(df, value_col_name="account_value"):
     df = deepcopy(df)
@@ -72,14 +76,20 @@ def backtest_plot(
         baseline_end,
         baseline_ticker="^DJI",
         value_col_name="account_value",
+        baseline_path=None,
 ):
     df = deepcopy(account_value)
     df["date"] = pd.to_datetime(df["date"])
     test_returns = get_daily_return(df, value_col_name=value_col_name)
 
-    baseline_df = get_baseline(
-        ticker=baseline_ticker, start=baseline_start, end=baseline_end
-    )
+    if baseline_ticker == "^DJI":
+        baseline_df = get_baseline(
+            ticker=baseline_ticker, start=baseline_start, end=baseline_end
+        )
+    else:
+        baseline_df = get_baseline_ind(
+            ticker=baseline_ticker, start=baseline_start, end=baseline_end, baseline_path=baseline_path
+        )
 
     baseline_df["date"] = pd.to_datetime(baseline_df["date"], format="%Y-%m-%d")
     baseline_df = pd.merge(df[["date"]], baseline_df, how="left", on="date")
@@ -97,6 +107,37 @@ def get_baseline(ticker, start, end):
     return YahooDownloader(
         start_date=start, end_date=end, ticker_list=[ticker]
     ).fetch_data()
+
+def get_baseline_ind(ticker, start, end, baseline_path=None):
+    # baseline = get_history(
+    #                     symbol=ticker, 
+    #                     start=get_date_from_str(start),
+    #                     end=get_date_from_str(end),
+    #                     index=True
+    #                     )
+
+    # baseline.rename(columns = {'Close':'close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume':'volume'}, inplace = True)
+    # baseline = baseline.rename_axis('date').reset_index()
+
+    # baseline['date'] = [str(i) for i in baseline['date']]
+    # baseline['tic'] = [ticker] * len(baseline)
+    if ticker == 'NIFTY':
+        baseline = pd.read_csv('./data/nifty/nifty_index_baseline_2009_2022_Aug.csv')
+        baseline = data_split(baseline, start, end)
+    elif ticker == '^BSESN':
+        if baseline_path:
+            baseline = pd.read_csv(baseline_path)
+        else:
+            baseline = pd.read_csv('./data/sensex/sensex_index_baseline_latest.csv')
+            # baseline = yf.download(ticker,
+            #                         start,
+            #                         end)
+
+            # baseline.rename(columns = {'Close':'close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume':'volume'}, inplace = True)
+            # baseline = baseline.rename_axis('date').reset_index()
+            # baseline['tic'] = [ticker]*len(baseline)
+        baseline = data_split(baseline, start, end)
+    return baseline
 
 
 def trx_plot(df_trade, df_actions, ticker_list):
@@ -143,21 +184,28 @@ def trx_plot(df_trade, df_actions, ticker_list):
         plt.xticks(rotation=45, ha="right")
         plt.show()
 
-def get_comparison_df(df_account_value, baseline_ticker, period="daily"):
+def get_comparison_df(df_account_value, baseline_ticker, period="daily", baseline_path=None):
     dates = str(df_account_value.loc[0,'date']) + '_to_' + str(df_account_value.loc[len(df_account_value)-1,'date'])
     agent_col = f'agent_{dates}'
     agent_results = pd.DataFrame(backtest_stats(account_value=df_account_value, period=period), columns=[agent_col])
     agent_results['metric'] = agent_results.index
     agent_results.reset_index(drop=True, inplace=True)
 
-    baseline_df_dji = get_baseline(
-        ticker=baseline_ticker, 
-        start = df_account_value.loc[0,'date'],
-        end = df_account_value.loc[len(df_account_value)-1,'date'])
+    if baseline_ticker == "^DJI":
+        baseline_df_dji = get_baseline(
+            ticker = baseline_ticker, 
+            start = df_account_value.loc[0,'date'],
+            end = df_account_value.loc[len(df_account_value)-1,'date'])
+    else:
+        baseline_df_dji = get_baseline_ind(
+            ticker = baseline_ticker, 
+            start = df_account_value.loc[0,'date'],
+            end = df_account_value.loc[len(df_account_value)-1,'date'],
+            baseline_path=baseline_path)
 
     baseline_indices = [i for i, date in enumerate(baseline_df_dji['date']) if date in list(df_account_value['date'])]
     new_baseline_df = baseline_df_dji.loc[baseline_indices, :]
-    dji_col = f'dji_{dates}'
+    dji_col = f'{baseline_ticker}_{dates}'
     dji_results = pd.DataFrame(backtest_stats(account_value=new_baseline_df, value_col_name="close", period=period), columns=[dji_col])
     dji_results['metric'] = dji_results.index
     dji_results.reset_index(drop=True, inplace=True)

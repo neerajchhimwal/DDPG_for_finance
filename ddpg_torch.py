@@ -1,3 +1,4 @@
+from cmath import exp
 import os
 import torch as T
 import torch.nn as nn
@@ -6,8 +7,8 @@ import torch.optim as optim
 import numpy as np
 import json
 
-from config import DEVICE, sigma, theta, dt
-from config import CHECKPOINT_DIR, LR_SCHEDULE_STEP_SIZE
+from config import DEVICE, EXPLORATION_NOISE, LR_SCHEDULE_STEP_SIZE_ACTOR, LR_SCHEDULE_STEP_SIZE_CRITIC, NORMAL_SCALAR, UNIFORM_INITIAL_EXPLORATION, EXPLORATION_STEP_COUNT
+from config import CHECKPOINT_DIR, NOISE_ANNEALING
 import os
 import wandb
 import random
@@ -19,7 +20,7 @@ class OUActionNoise(object):
 
     this will be added in the actor class to add some exploration noise
     '''
-    def __init__(self, mu, sigma=sigma, theta=theta, dt=dt, x0=None):
+    def __init__(self, mu, sigma, theta, dt, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
@@ -89,7 +90,7 @@ class CriticNetwork(nn.Module):
     '''
     approximates the value function for critic network
     '''
-    def __init__(self, beta, input_dims, fc1_dims, fc2_dims, n_actions, name,
+    def __init__(self, beta, input_dims, fc1_dims, fc2_dims, n_actions, name, 
                  chkpt_dir=CHECKPOINT_DIR):
         super(CriticNetwork, self).__init__()
         self.input_dims = input_dims
@@ -111,15 +112,22 @@ class CriticNetwork(nn.Module):
         T.nn.init.uniform_(self.fc2.bias.data, -f2, f2)
         self.bn2 = nn.LayerNorm(self.fc2_dims)
 
+        # self.fc3 = nn.Linear(self.fc2_dims, self.fc3_dims)  #l3
+        # f3_ = 1./np.sqrt(self.fc3.weight.data.size()[0])    #l3
+        # T.nn.init.uniform_(self.fc3.weight.data, -f3_, f3_) #l3
+        # T.nn.init.uniform_(self.fc3.bias.data, -f3_, f3_)   #l3
+        # self.bn3 = nn.LayerNorm(self.fc3_dims)              #l3
+
         self.action_value = nn.Linear(self.n_actions, self.fc2_dims)
         f3 = 0.003
         self.q = nn.Linear(self.fc2_dims, 1)
+        # self.q = nn.Linear(self.fc3_dims, 1)                #l3
         T.nn.init.uniform_(self.q.weight.data, -f3, f3)
         T.nn.init.uniform_(self.q.bias.data, -f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
         # self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=3, verbose=True, factor=0.1)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE_CRITIC, gamma=0.5)
 
         self.device = T.device(DEVICE)
         self.episode = 0
@@ -134,6 +142,11 @@ class CriticNetwork(nn.Module):
 
         action_value = F.relu(self.action_value(action))
         state_action_value = F.relu(T.add(state_value, action_value)) # order matters when adding in relu. can take separate relus and then add?
+        
+        # state_action_value = self.fc3(state_action_value)   #l3
+        # state_action_value = self.bn3(state_action_value)   #l3
+        # state_action_value = F.relu(state_action_value)     #l3
+        
         state_action_value = self.q(state_action_value)
 
         return state_action_value
@@ -162,12 +175,13 @@ class ActorNetwork(nn.Module):
     '''
     approximates the policy function
     '''
-    def __init__(self, alpha, input_dims, fc1_dims, fc2_dims, n_actions, name,
+    def __init__(self, alpha, input_dims, fc1_dims, fc2_dims, n_actions, name,  
                  chkpt_dir=CHECKPOINT_DIR):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
+        # self.fc3_dims = fc3_dims    #l3
         self.n_actions = n_actions
         self.checkpoint_file = os.path.join(chkpt_dir, name+'_lr_'+str(alpha)+'_ddpg.pt')
         self.fc1 = nn.Linear(self.input_dims, self.fc1_dims)
@@ -183,13 +197,20 @@ class ActorNetwork(nn.Module):
         T.nn.init.uniform_(self.fc2.bias.data, -f2, f2)
         self.bn2 = nn.LayerNorm(self.fc2_dims)
 
+        # self.fc3 = nn.Linear(self.fc2_dims, self.fc3_dims)  #l3
+        # f3_ = 1./np.sqrt(self.fc3.weight.data.size()[0])    #l3
+        # T.nn.init.uniform_(self.fc3.weight.data, -f3_, f3_) #l3
+        # T.nn.init.uniform_(self.fc3.bias.data, -f3_, f3_)   #l3
+        # self.bn3 = nn.LayerNorm(self.fc3_dims)              #l3
+
         f3 = 0.003
         self.mu = nn.Linear(self.fc2_dims, self.n_actions) # mu represents actions here
+        # self.mu = nn.Linear(self.fc3_dims, self.n_actions)  #l3
         T.nn.init.uniform_(self.mu.weight.data, -f3, f3)
         T.nn.init.uniform_(self.mu.bias.data, -f3, f3)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=LR_SCHEDULE_STEP_SIZE_ACTOR, gamma=0.5)
 
         self.device = T.device(DEVICE)
         self.episode = 0
@@ -202,6 +223,9 @@ class ActorNetwork(nn.Module):
         x = self.fc2(x)
         x = self.bn2(x)
         x = F.relu(x)
+        # x = self.fc3(x)                 #l3
+        # x = self.bn3(x)                 #l3
+        # x = F.relu(x)                   #l3
         x = T.tanh(self.mu(x)) # hyperboplic tangent binds the action in the range -1 to +1 (from the paper)
                                # for use cases where actions need to be in a different range, multiplication is required
 
@@ -228,9 +252,9 @@ class ActorNetwork(nn.Module):
         
 
 class Agent(object):
-    def __init__(self, alpha, beta, input_dims, tau, ckp_dir, gamma=0.99,
+    def __init__(self, alpha, beta, input_dims, tau, ckp_dir, total_steps_global, gamma=0.99,
                  n_actions=2, max_size=1000000, layer1_size=400,
-                 layer2_size=300, batch_size=64):
+                 layer2_size=300, batch_size=64, sigma=0.15, theta=0.2, dt=1e-2):
 
         '''
         alpha and beta are the learning rates of actor and critic n/w respectively
@@ -241,12 +265,15 @@ class Agent(object):
         self.batch_size = batch_size
         self.n_actions = n_actions
         self.checkpoint_dir = ckp_dir
+        self.current_step_count = 0
+        self.total_steps_global = total_steps_global 
+        
         self.actor = ActorNetwork(alpha, input_dims, layer1_size,
-                                  layer2_size, n_actions=n_actions,
+                                  layer2_size, n_actions=n_actions, 
                                   name='Actor')
 
         self.critic = CriticNetwork(beta, input_dims, layer1_size,
-                                    layer2_size, n_actions=n_actions,
+                                    layer2_size, n_actions=n_actions, 
                                     name='Critic')
 
         self.target_actor = ActorNetwork(alpha, input_dims, layer1_size,
@@ -254,41 +281,70 @@ class Agent(object):
                                          name='TargetActor')
 
         self.target_critic = CriticNetwork(beta, input_dims, layer1_size,
-                                           layer2_size, n_actions=n_actions,
+                                           layer2_size, n_actions=n_actions, 
                                            name='TargetCritic')
 
-        self.noise = OUActionNoise(mu=np.zeros(n_actions))
+        self.noise = OUActionNoise(mu=np.zeros(n_actions), sigma=sigma, theta=theta, dt=dt)
 
         self.update_network_parameters(tau=1)
         self.actor_loss_step = 0
         self.critic_loss_step = 0
         self.episode = 0
         self.run = 0
+        
         # self.seed = seed
         # np.random.seed(self.seed)
         # # env.seed(SEED)
         # T.manual_seed(self.seed)
         # random.seed(self.seed)
 
-    def choose_action(self, observation):
+    def choose_action(self, observation, mode='train'):
         self.actor.eval()
         observation = T.tensor(observation, dtype=T.float).to(self.actor.device)
-        mu = self.actor.forward(observation)
-        self.actor.train()
-        exp_noise = T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
-        mu += exp_noise
-        mu = T.clamp(mu, min=-1, max=1)
-        # with T.no_grad():
-        #     mu = self.actor.forward(observation).cpu().detach().numpy()
-        # exp_noise = self.noise()
-
-        # mu_prime = np.clip(mu + exp_noise, -1, +1)
         
-        # mu_prime = T.clip(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device), min=-1, max=+1)
-        # mu_prime = T.tanh(mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device))
-        # mu_prime = mu + T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
-        # print(f'mu: {mu} mu_prime: {mu_prime}') 
-        # mu_prime.to(self.actor.device)
+        # print('action mu: ', mu)
+        # print('action shape: ', len(mu))
+        multiplier = 1
+        if NOISE_ANNEALING:
+            multiplier = (self.total_steps_global-self.current_step_count)/self.total_steps_global
+        
+        if mode == 'train':
+            self.actor.train()
+            if UNIFORM_INITIAL_EXPLORATION:
+                if self.current_step_count < EXPLORATION_STEP_COUNT:
+                    # uniform random dist with range (-1, 1)
+                    mu = T.tensor(np.random.uniform(low=-1.0, high=1.0, size=self.n_actions)).to(self.actor.device)
+                else:
+                    if EXPLORATION_NOISE == "OUACTION":
+                        exp_noise = T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
+                    elif EXPLORATION_NOISE == "GAUSSIAN":
+                        exp_noise = T.tensor(np.random.randn(len(mu)) * NORMAL_SCALAR).to(self.actor.device)
+                    
+                    mu = self.actor.forward(observation)
+                    
+                    mu += exp_noise*multiplier
+                    mu = T.clamp(mu, min=-1, max=1)
+            else:
+                
+                if EXPLORATION_NOISE == "OUACTION":
+                    exp_noise = T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
+                elif EXPLORATION_NOISE == "GAUSSIAN":
+                    exp_noise = T.tensor(np.random.randn(len(mu)) * NORMAL_SCALAR).to(self.actor.device)
+                
+                mu = self.actor.forward(observation)
+                mu += exp_noise*multiplier
+                mu = T.clamp(mu, min=-1, max=1)
+
+        else:
+                
+            # if EXPLORATION_NOISE == "OUACTION":
+            #     exp_noise = T.tensor(self.noise(), dtype=T.float).to(self.actor.device)
+            # elif EXPLORATION_NOISE == "GAUSSIAN":
+            #     exp_noise = T.tensor(np.random.randn(len(mu)) * NORMAL_SCALAR).to(self.actor.device)
+            
+            mu = self.actor.forward(observation)
+            # mu += exp_noise
+            # mu = T.clamp(mu, min=-1, max=1)
         
         return mu.cpu().detach().numpy()
 
@@ -307,62 +363,60 @@ class Agent(object):
         new_state = T.tensor(new_state, dtype=T.float).to(self.critic.device)
         action = T.tensor(action, dtype=T.float).to(self.critic.device)
         state = T.tensor(state, dtype=T.float).to(self.critic.device)
-
         self.target_actor.eval()
         self.target_critic.eval()
         self.critic.eval()
 
         self.critic.optimizer.zero_grad()
-        self.actor.optimizer.zero_grad()
-        # with T.no_grad():
-        target_actions = self.target_actor.forward(new_state)
-        critic_value_ = self.target_critic.forward(new_state, target_actions)
         critic_value = self.critic.forward(state, action)
-
-        target = []
-        for j in range(self.batch_size):
-            target.append(reward[j] + self.gamma*critic_value_[j]*done[j])
-        target = T.tensor(target).to(self.critic.device)
-        target = target.view(self.batch_size, 1)
-
-        self.critic.train()
-
-        critic_loss = F.mse_loss(critic_value, target)
+        # loss q
+        with T.no_grad():
+            target_actions = self.target_actor.forward(new_state)
+            critic_value_ = self.target_critic.forward(new_state, target_actions)
+            target = []
+            for j in range(self.batch_size):
+                target.append(reward[j] + self.gamma*critic_value_[j]*done[j])
+            target = T.tensor(target).to(self.critic.device)
+            target = target.view(self.batch_size, 1)
         
-        critic_loss_copy = critic_loss.detach().clone()
-        self.critic_loss_step = critic_loss_copy.cpu().numpy()
-
-        # backward
-        # self.critic.optimizer.zero_grad()
+        critic_loss = F.mse_loss(critic_value, target)
+        # loss q backward
         critic_loss.backward()
-
         # grad clip
         clipping_value = 1
         T.nn.utils.clip_grad_norm_(self.critic.parameters(), clipping_value)
-        # step
+        # q optimizer.step
         self.critic.optimizer.step()
-        self.critic.eval()
+        critic_loss_copy = critic_loss.detach().clone()
+        self.critic_loss_step = critic_loss_copy.cpu().numpy()
         
+        
+        
+        # Freeze Q-network so you don't waste computational effort 
+        # computing gradients for it during the policy learning step.
+        for p in self.critic.parameters():
+            p.requires_grad = False
+
+        self.actor.optimizer.zero_grad()
         mu = self.actor.forward(state)
-        self.actor.train()
-        # actor_loss = -self.critic.forward(state, mu)
-        # actor_loss = T.mean(actor_loss)
         actor_gradients = -self.critic.forward(state, mu)
-        actor_loss = T.mean(actor_gradients)
-
-        # backward
-        # self.actor.optimizer.zero_grad()
+        actor_loss = T.mean(actor_gradients)        
         actor_loss.backward()
-
         # grad clip
+        # print('ac grads: ', actor_gradients)
+        # print('ac params:', self.actor.parameters())
+        # print('='*100)
+        # print('='*100)
         T.nn.utils.clip_grad_norm_(self.actor.parameters(), clipping_value)
-
         # step                                   
         self.actor.optimizer.step()
-
         actor_loss_copy = actor_loss.detach().clone()
         self.actor_loss_step = actor_loss_copy.cpu().numpy()
-
+        
+        # Unfreeze Q-network so you can optimize it at next DDPG step.
+        for p in self.critic.parameters():
+            p.requires_grad = True
+        
         self.update_network_parameters()
         
 
@@ -522,7 +576,7 @@ class Agent(object):
                     wandb_config=None,
                     wandb_project_name=None,
                     save_ckp=False,
-                    ):
+                    cash_penalty=False):
 
         if use_wandb:
             self.run = wandb.init(project=wandb_project_name, tags=["DDPG", "RL"], config=wandb_config, job_type='train_model', reinit=True)
@@ -557,9 +611,14 @@ class Agent(object):
                 act = self.choose_action(obs)
                 new_state, reward, done, info = env.step(act)
                 self.remember(obs, act, reward, new_state, int(done))
-                self.learn()
+                if self.current_step_count >= EXPLORATION_STEP_COUNT:
+                    self.learn()
                 step_count += 1
-                cumulative_reward = (env.asset_memory[-1] - env_kwargs['initial_amount']) / env_kwargs['initial_amount']
+                self.current_step_count +=1 
+                if cash_penalty:
+                    cumulative_reward = (env.account_information["total_assets"][-1] - env_kwargs['initial_amount']) / env_kwargs['initial_amount']
+                else:
+                    cumulative_reward = (env.asset_memory[-1] - env_kwargs['initial_amount']) / env_kwargs['initial_amount']
                 cumulative_rewards_per_step_this_episode.append(cumulative_reward)
                 if use_wandb:
                     self.run.log({'Cumulative returns': cumulative_reward, 'days':day_counter_total})
@@ -569,16 +628,18 @@ class Agent(object):
                 critic_loss_per_episode += self.critic_loss_step
                 score += reward
                 obs = new_state
-
+            print(f'ep {i} score {score}')
+            actor_loss_per_episode = actor_loss_per_episode / step_count
+            critic_loss_per_episode = critic_loss_per_episode / step_count
             # print('$'*100)
-            # cr_lr = self.critic.optimizer.state_dict()['param_groups'][0]['lr']
-            # ac_lr = self.actor.optimizer.state_dict()['param_groups'][0]['lr']
+            cr_lr = self.critic.optimizer.state_dict()['param_groups'][0]['lr']
+            ac_lr = self.actor.optimizer.state_dict()['param_groups'][0]['lr']
             # print(f"Episode {i}, critic LR: {cr_lr}, critic loss: {critic_loss_per_episode}")
             # print(f"Episode {i},  actor LR: {ac_lr},   actor loss: {actor_loss_per_episode}")
             # print('$'*100)
-            
-            self.critic.scheduler.step()
-            self.actor.scheduler.step()
+            if self.current_step_count >= EXPLORATION_STEP_COUNT:
+                self.critic.scheduler.step()
+                self.actor.scheduler.step()
 
             score_history.append(score)
             if use_wandb:
@@ -587,9 +648,9 @@ class Agent(object):
                 # run.log({'reward avg 100 games': np.mean(score_history[-100:]), 'episode': i})
                 self.run.log({'Actor loss': actor_loss_per_episode, 'episode': i})
                 self.run.log({'Critic loss': critic_loss_per_episode, 'episode': i})
-
-                # run.log({'Actor LR': ac_lr, 'episode': i})
-                # run.log({'Critic LR': cr_lr, 'episode': i})
+                self.run.log({'Avg reward': np.mean(score_history[-5:]), 'episode': i}) # last 5 ep reward avg
+                self.run.log({'Actor LR': ac_lr, 'episode': i})
+                self.run.log({'Critic LR': cr_lr, 'episode': i})
             
             if save_ckp:
                 if (i % ckp_save_freq == 0 or i == total_episodes-1):

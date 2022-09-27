@@ -35,7 +35,7 @@ def download_indian_stocks(ticker_list, start_date, end_date):
     '''
     dfs = []
     for sym in tqdm(ticker_list):
-        df = get_history(symbol=sym, start=get_date_from_str(start_date), end=get_date_from_str(end_date))
+        df = get_history(symbol=sym, start=get_date_from_str(start_date), end=get_date_from_str(end_date), index=False)
         # print(sym)
         if df['Symbol'].nunique() != 1:
             df = normalise_tic_name_to_latest(df)

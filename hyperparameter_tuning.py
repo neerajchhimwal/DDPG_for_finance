@@ -26,7 +26,8 @@ from plot import get_comparison_df, backtest_stats, backtest_plot, get_daily_ret
 
 import config_tickers
 from download_data import process_data
-from stock_trading_env import StockTradingEnv
+# from stock_trading_env import StockTradingEnv
+from stock_trading_env_mod_reward import StockTradingEnv
 from finrl.meta.preprocessor.yahoodownloader import YahooDownloader
 from finrl.meta.preprocessor.preprocessors import data_split
 from trade_stocks import trade_on_test_df
@@ -39,11 +40,12 @@ import kaleido
 import itertools
 import random
 import torch
-
+import empyrical as ep
 # from config_tuning import *
 import config_tuning
-from config import SEED, PERIOD, HMAX, INDICATORS, DATE_OF_THE_MONTH_TO_TAKE_ACTIONS, BASELINE_TICKER_NAME_BACKTESTING
-# from hyp_utils import *
+from config import SEED, PERIOD, HMAX, INITIAL_AMOUNT, INDICATORS, DATE_OF_THE_MONTH_TO_TAKE_ACTIONS, BASELINE_TICKER_NAME_BACKTESTING
+import config
+from utils import get_baseline_daily_returns
 
 ## Fixed
 tpm_hist = {}  # record tp metric values for trials
@@ -51,6 +53,7 @@ tp_metric = 'avgwl'  # specified trade_param_metric: ratio avg value win/loss
 ## Settable by User
 n_trials = config_tuning.N_TRIALS  # number of HP optimization runs
 total_episodes = config_tuning.TOTAL_EPISODES # per HP optimization run
+
 ## Logging callback params
 lc_threshold=1e-5
 lc_patience=10
@@ -122,6 +125,31 @@ def calc_trade_metric(df,metric='avgwl'):
 
     return m
 
+def calculate_sharpe(df):
+    df['daily_return'] = df['account_value'].pct_change(1)
+    if df['daily_return'].std() !=0:
+        sharpe = (252**0.5)*df['daily_return'].mean() / df['daily_return'].std()
+        return sharpe
+    else:
+        return 0
+
+def calculate_cum_return(df):
+    df['daily_return'] = df['account_value'].pct_change(1)
+    return ep.cum_returns_final(df['daily_return'], starting_value=0)
+
+def calculate_cum_ret_wrt_index(df_account_value, baseline_ticker, baseline_path):
+    test_returns, baseline_returns = backtest_plot(account_value = df_account_value, 
+                                                 baseline_ticker = baseline_ticker, 
+                                                 baseline_start = df_account_value.iloc[0]['date'],
+                                                 baseline_end = df_account_value.iloc[-1]['date'],
+                                                baseline_path = baseline_path)
+    cum_ret_agent = ep.cum_returns_final(test_returns, starting_value=0)
+    cum_ret_baseline = ep.cum_returns_final(baseline_returns, starting_value=0)
+    ret_better_than_baseline = cum_ret_agent - cum_ret_baseline
+
+    print(f"cum ret agent until {df_account_value.iloc[-1]['date']}: {cum_ret_agent}")
+    print(f"cum ret baseline until {df_account_value.iloc[-1]['date']}: {cum_ret_baseline}")
+    return ret_better_than_baseline
 
 def prep_data(df_actions,
               df_prices_trade):
@@ -355,54 +383,72 @@ class LoggingCallback:
 def sample_ddpg_params(trial:optuna.Trial):
     # Size of the replay buffer
     # buffer_size = trial.suggest_categorical("buffer_size", [int(1e4), int(1e5), int(1e6)])
-    # tau = trial.suggest_categorical("tau", [0.01, 0.001, 0.005])
+    tau = trial.suggest_categorical("tau", [0.001, 0.005, 0.009, 0.01])
+    # tau = trial.suggest_categorical("tau", [0.005, 0.009, 0.01, 0.02])
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1e-1)
-#     learning_rate_critic = trial.suggest_loguniform("learning_rate_critic", 1e-5, 1e-1)
-#     learning_rate_actor = 10**trial.suggest_int('logval', -5, 0)
+    # learning_rate_critic = trial.suggest_loguniform("learning_rate_critic", 1e-5, 1e-1)
+    # learning_rate_actor = trial.suggest_loguniform("learning_rate_actor", 1e-5, 1e-1)
+    # learning_rate_actor = 10**trial.suggest_int('logval', -5, 0)
 #     learning_rate_critic = 10**trial.suggest_int('logval', -5, 0)
     if PERIOD=='monthly':
         batch_size = trial.suggest_categorical("batch_size", [4, 8, 16, 32, 64])
     else:
-        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256, 512])
+        batch_size = trial.suggest_categorical("batch_size", [32, 64, 128, 256])
 
-    net_arch = trial.suggest_categorical("net_arch", ["small", "medium", "big"])
+    net_arch = trial.suggest_categorical("net_arch", ["medium", "big"])
 
     net_arch = {
         "small": [64, 64],
         "medium": [256, 256],
-        "default": [400, 400],
-        "big": [512, 512],
+        # "default": [400, 400],
+        "big": [512, 512]
     }[net_arch]
 
     return {
             # "tau": tau,
             # "buffer_size": buffer_size,
+            "tau": tau,
+            # "buffer_size": buffer_size,
             "learning_rate": learning_rate,
             "batch_size": batch_size,
             "layer_1_size": net_arch[0],
-            "layer_2_size": net_arch[1]
+            "layer_2_size": net_arch[1],
+            # "layer_3_size": net_arch[1]
             }
 
 
 def objective(trial:optuna.Trial, e_train_gym, env_kwargs, train_df, test_df):
-
+    print(f'SEED: {SEED}')
+    np.random.seed(SEED)
+    e_train_gym.seed(SEED)
+    torch.manual_seed(SEED)
+    random.seed(SEED)
     #Trial will suggest a set of hyperparamters from the specified range
     hyperparameters = sample_ddpg_params(trial)
     print(f'Hyperparameters from objective: {hyperparameters}')
     
-    ACTOR_LR = hyperparameters["learning_rate"]
+    ACTOR_LR = hyperparameters["learning_rate"] / 10 
     CRITIC_LR = hyperparameters["learning_rate"]
     BATCH_SIZE = hyperparameters["batch_size"]
-    TAU = 0.001
-    buffer_size = 10000
-    # TAU = hyperparameters["tau"]
+    # TAU = config.TAU
+    buffer_size = config.BUFFER_SIZE
+    TAU = hyperparameters["tau"]
+    # TAU = 0.01
     LAYER_1_SIZE = hyperparameters["layer_1_size"]
     LAYER_2_SIZE = hyperparameters["layer_2_size"]
+    # LAYER_3_SIZE = hyperparameters["layer_3_size"]
     # buffer_size = hyperparameters["buffer_size"]
-    
+
+    noise_params = { # coming from config.py
+    'sigma': config.sigma, 
+    'theta': config.theta, 
+    'dt': config.dt,
+    }
+    TOTAL_STEPS_GLOBAL = total_episodes*train_df.date.nunique()
+
     model_ddpg = Agent(alpha=ACTOR_LR, beta=CRITIC_LR, ckp_dir=config_tuning.TUNING_TRIAL_MODELS_DIR, input_dims=env_kwargs['state_space'], tau=TAU,
               batch_size=BATCH_SIZE, layer1_size=LAYER_1_SIZE, layer2_size=LAYER_2_SIZE, max_size=buffer_size,
-              n_actions=env_kwargs['stock_dim'])
+              n_actions=env_kwargs['stock_dim'], total_steps_global=TOTAL_STEPS_GLOBAL, **noise_params)
     
     trained_ddpg = model_ddpg.train_model(
                         total_episodes=total_episodes, train_from_scratch=True, 
@@ -417,15 +463,22 @@ def objective(trial:optuna.Trial, e_train_gym, env_kwargs, train_df, test_df):
                                                                              model=trained_ddpg, 
                                                                              train_df=train_df, 
                                                                              env_kwargs=env_kwargs,
-                                                                            seed=SEED)
+                                                                            seed=SEED,
+                                                                            mode='test')
 
     
     # Calculate trade performance metric
     # Currently ratio of average win and loss market values
     tpm = calc_trade_perf_metric(df_actions, test_df, tp_metric, tpm_hist)
+    # tpm = calculate_sharpe(df_account_value)
+    # tpm = calculate_cum_return(df_account_value)
+    # tpm = calculate_cum_ret_wrt_index(  df_account_value, 
+    #                                     baseline_ticker=config.BASELINE_TICKER_NAME_BACKTESTING, 
+    #                                     baseline_path='./data/sensex/sensex_index_baseline.csv')
+    print('TPM: ', tpm)
     return tpm
 
-def get_tuned_hyperparams(train_df, test_df, env_kwargs, study_name='ddpg_study'):
+def get_tuned_hyperparams(train_df, test_df, env_kwargs, study_name='ddpg_study_'):
 
     e_train_gym = StockTradingEnv(df=train_df, **env_kwargs, print_verbosity=n_trials)
     env_train, _ = e_train_gym.get_sb_env()
@@ -466,11 +519,12 @@ def get_tuned_hyperparams(train_df, test_df, env_kwargs, study_name='ddpg_study'
 
 if __name__ == "__main__":
     TRAIN_START_DATE = '2009-01-01'
-    TRAIN_END_DATE = '2015-01-01'
+    TRAIN_END_DATE = '2016-01-01'
     # TEST_START_DATE = '2015-10-01'
-    TEST_START_DATE = '2015-01-01'
-    TEST_END_DATE = '2016-01-01'
-    ticker_name_from_config_tickers = 'DOW_30_TICKER'
+    TEST_START_DATE = '2016-01-01'
+    TEST_END_DATE = '2020-05-09' 
+    # TEST_END_DATE = '2022-07-31' 
+    # ticker_name_from_config_tickers = 'DOW_30_TICKER'
     # TRAIN_CSV_NAME = f'./data/train_{ticker_name_from_config_tickers}_{TRAIN_START_DATE}_to_{TRAIN_END_DATE}.csv'
     # TEST_CSV_NAME = f'./data/test_{ticker_name_from_config_tickers}_{TEST_START_DATE}_to_{TEST_END_DATE}.csv'
 
@@ -478,7 +532,12 @@ if __name__ == "__main__":
     # train = pd.read_csv(TRAIN_CSV_NAME, index_col='Unnamed: 0')
     # test = pd.read_csv(TEST_CSV_NAME, index_col='Unnamed: 0')
     # print(f'Train shape: {train.shape} \nTest shape: {test.shape}')
-    processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+    # processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+    # processed_csv = './data/nifty/data_processed_nifty_tics_2009_2022_Aug.csv'
+    if BASELINE_TICKER_NAME_BACKTESTING == '^DJI':
+        processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+    else:
+        processed_csv = './data/sensex/sensex_tics_processed.csv'
     print(f'Reading processed csv {processed_csv}')
     df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 
@@ -496,6 +555,9 @@ if __name__ == "__main__":
     print('Test start date:', test['date'].iloc[0], ' Test end date:', test['date'].iloc[-1])
 
     print(f'Train shape: {train.shape}, Test shape: {test.shape}')
+    baseline_daily_returns_wrt_day_list = get_baseline_daily_returns(baseline_ticker=BASELINE_TICKER_NAME_BACKTESTING,
+                                                                    train=train)
+
     stock_dimension = len(train.tic.unique())
     state_space = 1 + 2*stock_dimension + len(INDICATORS) * stock_dimension
     print(f"Stock Dimension: {stock_dimension}, State Space: {state_space}")
@@ -503,7 +565,7 @@ if __name__ == "__main__":
     num_stock_shares = [0] * stock_dimension
     env_kwargs = {
         "hmax": HMAX,
-        "initial_amount": 1000000,
+        "initial_amount": INITIAL_AMOUNT,
         "num_stock_shares": num_stock_shares,
         "buy_cost_pct": buy_cost_list,
         "sell_cost_pct": sell_cost_list,
@@ -511,8 +573,9 @@ if __name__ == "__main__":
         "stock_dim": stock_dimension,
         "tech_indicator_list": INDICATORS,
         "action_space": stock_dimension,
-        "reward_scaling": 1e-4
+        "reward_scaling": 1e-4,
+        # "baseline_daily_returns": baseline_daily_returns_wrt_day_list,
     }
-
+    
     tuned_hyperparams = get_tuned_hyperparams(train_df=train, test_df=test, env_kwargs=env_kwargs, study_name='daily_ddpg')
     print('Tuned hyperparams: ', tuned_hyperparams)

@@ -1,12 +1,15 @@
 import matplotlib.pyplot as plt 
 import numpy as np
 import datetime
+import pandas as pd
+from plot import get_baseline_ind, get_comparison_df, backtest_plot, get_baseline, get_daily_return
+from copy import deepcopy
 
 def plotLearning(scores, filename, x=None, window=5):   
     N = len(scores)
     running_avg = np.empty(N)
     for t in range(N):
-	    running_avg[t] = np.mean(scores[max(0, t-window):(t+1)])
+        running_avg[t] = np.mean(scores[max(0, t-window):(t+1)])
     if x is None:
         x = [i for i in range(N)]
     plt.ylabel('Score')       
@@ -84,4 +87,32 @@ def sample_data_for_every_nth_day_of_the_month(df, date):
             idx.append(i)
 
     df = df.set_axis(idx)
-    return df
+    return 
+
+def get_baseline_daily_returns(baseline_ticker, train):   
+    if baseline_ticker=='^DJI':
+        baseline_df = get_baseline(
+                                    ticker=baseline_ticker, 
+                                    start=train.date.iloc[0],
+                                    end=train.date.iloc[-1]
+                                )
+    else:
+        baseline_df = get_baseline_ind(
+                                    ticker=baseline_ticker, 
+                                    start=train.date.iloc[0],
+                                    end=train.date.iloc[-1]
+        )
+
+    train_cpy = deepcopy(train)
+    train_cpy = train_cpy.drop_duplicates(subset=['date'])
+    train_cpy["date"] = pd.to_datetime(train_cpy["date"])
+    baseline_df["date"] = pd.to_datetime(baseline_df["date"], format="%Y-%m-%d")
+    baseline_df = pd.merge(train_cpy[["date"]], baseline_df, how="left", on="date")
+    baseline_df = baseline_df.fillna(method="ffill").fillna(method="bfill")
+    baseline_returns = get_daily_return(baseline_df, value_col_name="close")
+    baseline_daily_returns_wrt_day = pd.DataFrame(baseline_returns)
+    # df containing % return compared to previous day's portfolio amt
+    baseline_daily_returns_wrt_day['day'] = range(0, len(baseline_daily_returns_wrt_day)) 
+    baseline_daily_returns_wrt_day.fillna(value=0, inplace=True)
+    baseline_daily_returns_wrt_day_list = list(baseline_daily_returns_wrt_day['daily_return'])
+    return baseline_daily_returns_wrt_day_list

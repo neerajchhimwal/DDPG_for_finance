@@ -83,3 +83,36 @@ NIFTY_50_TICKER = [
     'ULTRACEMCO',
     'WIPRO'
     ]
+
+SENSEX_30_TICKER = [
+    'RELIANCE',
+    'HDFCBANK',
+    'INFY',
+    'HDFC',
+    'ICICIBANK',
+    'TCS',
+    'KOTAKBANK',
+    'HINDUNILVR',
+    'ITC',
+    'AXISBANK',
+    'LT',
+    'BAJFINANCE',
+    'SBIN',
+    'BHARTIARTL',
+    'ASIANPAINT',
+    'HCLTECH',
+    'MARUTI',
+    'M&M',
+    'ULTRACEMCO',
+    'SUNPHARMA',
+    'TITAN',
+    'TECHM',
+    'NESTLEIND',
+    'BAJAJFINSV',
+    'POWERGRID',
+    'INDUSINDBK',
+    'TATASTEEL',
+    'NTPC',
+    'BAJAJ-AUTO',
+    'ONGC'
+    ]
