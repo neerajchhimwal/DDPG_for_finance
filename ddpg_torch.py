@@ -252,7 +252,7 @@ class ActorNetwork(nn.Module):
         
 
 class Agent(object):
-    def __init__(self, alpha, beta, input_dims, tau, ckp_dir, total_steps_global, gamma=0.99,
+    def __init__(self, alpha, beta, input_dims, tau, ckp_dir, total_steps_global=None, gamma=0.99,
                  n_actions=2, max_size=1000000, layer1_size=400,
                  layer2_size=300, batch_size=64, sigma=0.15, theta=0.2, dt=1e-2):
 
@@ -472,7 +472,7 @@ class Agent(object):
         self.target_critic.load_checkpoint()
         self.episode = self.target_critic.episode
 
-    def save_checkpoint(self, last_episode, checkpoint_name=None, save_noise=False):
+    def save_checkpoint(self, last_episode, checkpoint_name=None, save_noise=True):
         """
         Saving the networks and all parameters to a file in 'checkpoint_dir'
         
@@ -519,7 +519,7 @@ class Agent(object):
 
         return os.path.abspath(last_ckp_file), noise_p
 
-    def load_checkpoint(self, checkpoint_path=None, load_noise=False):
+    def load_checkpoint(self, checkpoint_path=None, noise_path=None, load_noise=False):
         """
         Saving the networks and all parameters from a given path. If the given path is None
         then the latest saved file in 'checkpoint_dir' will be used.

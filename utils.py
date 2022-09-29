@@ -116,3 +116,14 @@ def get_baseline_daily_returns(baseline_ticker, train):
     baseline_daily_returns_wrt_day.fillna(value=0, inplace=True)
     baseline_daily_returns_wrt_day_list = list(baseline_daily_returns_wrt_day['daily_return'])
     return baseline_daily_returns_wrt_day_list
+
+def get_df_cum_ret(cum_rets):
+    d = pd.DataFrame(cum_rets)
+    d = d.reset_index('date')
+    d['date'] = [i.date() for i in d['date']]
+    d['date'] = [str(i) for i in d['date']]
+    d.set_index('date', inplace=True)
+    d.rename(columns = {0:'Cumulative Returns'}, inplace = True)
+    d['Cumulative Returns'] = [i*100 for i in d['Cumulative Returns']]
+    d.rename(columns={'Cumulative Returns': 'Cumulative Returns %'}, inplace=True)
+    return d
