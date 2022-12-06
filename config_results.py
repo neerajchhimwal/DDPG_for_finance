@@ -1,8 +1,8 @@
 import torch
 import os
 
-# model_type = "dji_daily"
-model_type = "dji_monthly"
+model_type = "dji_daily"
+# model_type = "dji_monthly"
 # model_type = "dji_daily_retrain"
 # model_type = "dji_monthly_retrain"
 
