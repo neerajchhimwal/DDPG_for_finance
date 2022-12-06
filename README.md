@@ -16,6 +16,18 @@ conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 Make sure you have an active weights and biases account login:
   - run '_wandb login_' in terminal
 
+## For Generating results
+
+- Change "model_type" variable in config_results.py based on whether you want results for daily or monthly trading
+
+- Download trained models from google drive and place them in '../trained_models/'
+
+Run:
+```
+python get_results_artefacts.py
+```
+Note: make sure your wandb log in is done
+
 ## For hyperparameter tuning before training [Optional]
 - Make changes in "config_tuning.py" if you want to change num_trials etc.
 - Check train test split in hyperparemeter_tuning.py script and
@@ -44,14 +56,3 @@ python train_ddpg_agent_with_retraining.py
 ```
 Note: if the parameter _'do_hyp_tuning'_ is set to True in _train_ddpg_agent_with_retraining.py_, you don't need to mention hyperparams in config as they won't be used. For every training, optimal hyperparameters will be found and used.
 
-## For Generating results
-
-- Change "model_type" variable in config_results.py based on whether you want results for daily or monthly trading
-
-- Download trained models from google drive and place them in '../trained_models/'
-
-Run:
-```
-python get_results_artefacts.py
-```
-Note: make sure your wandb log in is done
