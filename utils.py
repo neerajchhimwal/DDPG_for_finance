@@ -87,7 +87,7 @@ def sample_data_for_every_nth_day_of_the_month(df, date):
             idx.append(i)
 
     df = df.set_axis(idx)
-    return 
+    return df
 
 def get_baseline_daily_returns(baseline_ticker, train):   
     if baseline_ticker=='^DJI':

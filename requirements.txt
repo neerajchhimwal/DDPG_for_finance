@@ -2,7 +2,7 @@ gym
 matplotlib
 numpy 
 pandas
-finrl
+finrl==0.3.5
 wandb
 optuna
 pyfolio-reloaded
@@ -11,3 +11,4 @@ torchaudio==0.12.0
 torchvision==0.13.0
 nsepy
 empyrical
+plotly

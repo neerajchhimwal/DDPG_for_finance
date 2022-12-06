@@ -43,3 +43,15 @@ Run:
 python train_ddpg_agent_with_retraining.py
 ```
 Note: if the parameter _'do_hyp_tuning'_ is set to True in _train_ddpg_agent_with_retraining.py_, you don't need to mention hyperparams in config as they won't be used. For every training, optimal hyperparameters will be found and used.
+
+## For Generating results
+
+- Change "model_type" variable in config_results.py based on whether you want results for daily or monthly trading
+
+- Download trained models from google drive and place them in '../trained_models/'
+
+Run:
+```
+python get_results_artefacts.py
+```
+Note: make sure your wandb log in is done
