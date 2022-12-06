@@ -10,10 +10,14 @@ from tqdm import tqdm
 from nsepy import get_history
 from datetime import date
 
-# def download(start_date, end_date, ticker_list=config_tickers.DOW_30_TICKER):
-#     df = YahooDownloader(start_date = start_date, end_date = start_date, ticker_list = ticker_list).fetch_data()
+import argparse
+import warnings
+warnings.filterwarnings('ignore')
 
-#     return df
+def download(start_date, end_date, ticker_list=config_tickers.DOW_30_TICKER):
+    df = YahooDownloader(start_date = start_date, end_date = end_date, ticker_list = ticker_list).fetch_data()
+
+    return df
 
 def get_date_from_str(str_date):
     '''
@@ -73,3 +77,20 @@ def process_data(df, use_technical_indicator=True, technical_indicator_list=conf
     processed_full = processed_full.fillna(0)
 
     return processed_full
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--start-date', '-s', type=str)
+    parser.add_argument('--end-date', '-e', type=str)
+    
+    args = parser.parse_args()
+    output_file_path = f'./data/DJI_{args.start_date}_{args.end_date}_processed.csv'
+    print(output_file_path)
+    df = download(start_date=args.start_date, end_date=args.end_date, ticker_list=config_tickers.DOW_30_TICKER)
+    print(f'Unique tics: {df.tic.nunique()}')
+    print('Processing...')
+    processed_df = process_data(df)
+    print(f'Unique tics: {df.tic.nunique()}')
+    processed_df.to_csv(output_file_path)
+
+    print(f'File saved at: {output_file_path}')

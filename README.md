@@ -5,6 +5,7 @@
 ```
 conda create -n ddpg_trading python=3.8
 conda activate ddpg_trading
+brew install swig
 pip install -r requirements.txt
 ```
 
@@ -16,9 +17,18 @@ conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
 Make sure you have an active weights and biases account login:
   - run '_wandb login_' in terminal
 
+## Downloading DJI data for testing
+Run the following command with required start_date and end_date:
+```
+python download_data.py --start-date 2009-01-01 --end-date 2022-11-30
+```
+This command will download DOW30 data, process it, and add technical indicators defined in "config.py". The output csv file will be saved in './data' directory and filename will be printed as output.
+
 ## For Generating results
 
 - Change "model_type" variable in config_results.py based on whether you want results for daily or monthly trading
+
+- Change "processed_csv" variable in config_results.py (line 7) to select the data file required
 
 - Download trained models from google drive and place them in '../trained_models/'
 

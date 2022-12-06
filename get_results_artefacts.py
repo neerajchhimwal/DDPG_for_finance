@@ -20,10 +20,11 @@ import empyrical as ep
 from utils import sample_data_for_every_nth_day_of_the_month, get_df_cum_ret
 import json
 
-if BASELINE_TICKER_NAME_BACKTESTING == '^DJI':
-    processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
-else:
-    processed_csv = './data/sensex/sensex_tics_processed.csv'
+# if BASELINE_TICKER_NAME_BACKTESTING == '^DJI':
+#     processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+# else:
+#     processed_csv = './data/sensex/sensex_tics_processed.csv'
+
 print(f'Reading processed csv {processed_csv}')
 df_processed = pd.read_csv(processed_csv, index_col='Unnamed: 0')
 

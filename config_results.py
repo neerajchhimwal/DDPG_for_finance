@@ -3,8 +3,14 @@ import os
 
 model_type = "dji_daily"
 # model_type = "dji_monthly"
-# model_type = "dji_daily_retrain"
-# model_type = "dji_monthly_retrain"
+
+processed_csv = './data/data_processed_DOW_30_TICKER_2009-01-01_to_2022-07-31.csv'
+TRAIN_START_DATE = '2009-01-01'
+TRAIN_END_DATE = '2016-01-01'
+TEST_START_DATE = '2016-01-01'
+TEST_END_DATE = '2020-05-09'
+TRADE_START_DATE = TEST_START_DATE
+TRADE_END_DATE = '2022-01-04'
 
 if model_type == "dji_daily":
     RESULTS_DIR = f'./results/dji_daily'
@@ -30,15 +36,6 @@ if model_type == "dji_daily":
     DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when PERIOD == 'monthly'
     CHECKPOINT_DIR = '../trained_models/DAILY_proj_dji_daily_/'
     SAVED_CHECKPOINT_PATH = '../trained_models/DAILY_proj_dji_daily_/models/agent_ep_49.pt'
-
-    TRAIN_START_DATE = '2009-01-01'
-    TRAIN_END_DATE = '2016-01-01'
-    TEST_START_DATE = '2016-01-01'
-    TEST_END_DATE = '2020-05-09'
-    TRADE_START_DATE = TEST_START_DATE
-    TRADE_END_DATE = '2022-01-04'
-    TRADE_2_START_DATE = TEST_START_DATE
-    TRADE_2_END_DATE = '2022-01-04'
     BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
     # BASELINE_TICKER_NAME_BACKTESTING = '^BSESN'
     INITIAL_AMOUNT = 1000000 # USD
@@ -66,15 +63,6 @@ elif model_type == "dji_monthly":
     DATE_OF_THE_MONTH_TO_TAKE_ACTIONS = '02' # this will be used only when PERIOD == 'monthly'
     CHECKPOINT_DIR = '../trained_models/MONTHLY_proj_dji_monthly/'
     SAVED_CHECKPOINT_PATH = '../trained_models/MONTHLY_proj_dji_monthly/models/agent_ep_249.pt'
-
-    TRAIN_START_DATE = '2009-01-01'
-    TRAIN_END_DATE = '2016-01-01'
-    TEST_START_DATE = '2016-01-01'
-    TEST_END_DATE = '2020-05-09'
-    TRADE_START_DATE = TEST_START_DATE
-    TRADE_END_DATE = '2022-01-04'
-    TRADE_2_START_DATE = TEST_START_DATE
-    TRADE_2_END_DATE = '2022-01-04'
     BASELINE_TICKER_NAME_BACKTESTING = '^DJI'
     # BASELINE_TICKER_NAME_BACKTESTING = '^BSESN'
     INITIAL_AMOUNT = 1000000 # USD
